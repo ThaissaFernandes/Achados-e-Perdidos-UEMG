@@ -16,7 +16,7 @@ export default function ItemCard({ id, title, category, location, date, status, 
       return 'bg-amber-100 text-amber-700 border border-amber-200';
     }
     if (statusLower === 'devolvido') {
-      return 'bg-blue-100 text-blue-700 border border-blue-200';
+      return 'bg-rose-100 text-rose-700 border border-rose-200';
     }
     return 'bg-gray-100 text-gray-700 border border-gray-200';
   };

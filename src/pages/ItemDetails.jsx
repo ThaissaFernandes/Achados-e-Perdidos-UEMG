@@ -1,15 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { useAuth } from '../context/AuthContext';
 import { criarSolicitacaoDevolucao } from '../services/solicitacaoService';
-import { ArrowLeft, MapPin, Calendar, ShieldCheck, Loader2 } from 'lucide-react';
+import { ArrowLeft, MapPin, Calendar, ShieldCheck, Loader2, Edit } from 'lucide-react';
 
 export default function ItemDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { usuario } = useAuth(); // Utiliza 'usuario' conforme o AuthContext padrão
+  const { usuario, eAdmin } = useAuth();
 
   const [item, setItem] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -42,7 +42,7 @@ export default function ItemDetails() {
 
     setSubmitting(true);
     try {
-      // Ajustado para enviar o objeto completo esperado por solicitacaoService.js
+      // 1. Cria a solicitação no Firestore
       await criarSolicitacaoDevolucao({
         itemId: item.id,
         itemTitulo: item.titulo || item.title || 'Pertence',
@@ -52,13 +52,18 @@ export default function ItemDetails() {
         status: 'Pendente'
       });
 
+      // 2. Atualiza o status do item no Firestore para "em análise" para bloquear novas reivindicações
+      const itemRef = doc(db, 'itens', item.id);
+      await updateDoc(itemRef, { status: 'em análise' });
+
       setSubmitting(false);
       setIsModalOpen(false);
       setMensagemSucesso(true);
       
-      // Atualiza o estado visual instantaneamente
-      setItem((prev) => ({ ...prev, status: 'Em análise' }));
+      // Atualiza o estado local da tela
+      setItem((prev) => ({ ...prev, status: 'em análise' }));
     } catch (err) {
+      console.error("Erro ao solicitar devolução:", err);
       setSubmitting(false);
       alert('Ocorreu um erro ao processar sua solicitação.');
     }
@@ -84,7 +89,6 @@ export default function ItemDetails() {
     );
   }
 
-  // Formatação segura da data do Firestore (Timestamp ou String)
   const formatarDataRegistro = () => {
     const data = item.dataRegistro || item.dataEncontrado || item.dataCadastro;
     if (data?.toDate) {
@@ -97,9 +101,11 @@ export default function ItemDetails() {
     return 'Data não cadastrada';
   };
 
+  const statusAtual = (item.status || 'disponível').toLowerCase();
+
   return (
     <div className="p-4 space-y-4 max-w-md mx-auto pb-20">
-      {/* Botão de Voltar para Facilidade de Navegação (IHC) */}
+      {/* Botão de Voltar */}
       <button 
         onClick={() => navigate(-1)} 
         className="flex items-center gap-1 text-xs font-semibold text-gray-600 hover:text-indigo-900 transition"
@@ -111,7 +117,7 @@ export default function ItemDetails() {
       <div className="bg-white rounded-2xl p-2 border border-gray-100 shadow-sm">
         <img
           src={item.fotoUrl || item.imageUrl || 'https://via.placeholder.com/400?text=Sem+Foto'}
-          alt={item.titulo}
+          alt={item.titulo || item.title}
           className="w-full h-56 object-cover rounded-xl bg-gray-50"
         />
       </div>
@@ -119,13 +125,13 @@ export default function ItemDetails() {
       {/* Bloco de Detalhes */}
       <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm space-y-3">
         <div className="flex justify-between items-start">
-          <h1 className="text-base font-bold text-gray-800">{item.titulo}</h1>
+          <h1 className="text-base font-bold text-gray-800">{item.titulo || item.title}</h1>
           
           <span
-            className={`px-2.5 py-0.5 text-[10px] font-bold rounded-md ${
-              item.status === 'Disponível'
+            className={`px-2.5 py-0.5 text-[10px] font-bold rounded-md uppercase ${
+              statusAtual.includes('disponível') || statusAtual.includes('disponivel')
                 ? 'bg-emerald-100 text-emerald-800'
-                : item.status === 'Em análise'
+                : statusAtual.includes('análise') || statusAtual.includes('analise')
                 ? 'bg-amber-100 text-amber-800'
                 : 'bg-rose-100 text-rose-800'
             }`}
@@ -142,7 +148,7 @@ export default function ItemDetails() {
 
           <div className="pt-2 border-t border-gray-100 grid grid-cols-2 gap-2 text-[11px] text-gray-500">
             <span className="flex items-center gap-1 truncate">
-              <MapPin size={12} className="text-indigo-900" /> {item.localEncontrado || 'Não especificado'}
+              <MapPin size={12} className="text-indigo-900" /> {item.localEncontrado || item.local || 'Não especificado'}
             </span>
             <span className="flex items-center gap-1 truncate">
               <Calendar size={12} className="text-indigo-900" /> {formatarDataRegistro()}
@@ -160,21 +166,36 @@ export default function ItemDetails() {
           </div>
         )}
 
-        {/* Botão Principal de Ação */}
-        <div className="pt-2">
-          <button
-            onClick={() => setIsModalOpen(true)}
-            disabled={item.status !== 'Disponível' || mensagemSucesso}
-            className={`w-full py-2.5 rounded-xl font-semibold text-xs text-white transition flex items-center justify-center gap-2 ${
-              item.status === 'Disponível' && !mensagemSucesso
-                ? 'bg-indigo-900 hover:bg-indigo-800 active:scale-[0.98]'
-                : 'bg-gray-300 cursor-not-allowed'
-            }`}
-          >
-            <ShieldCheck size={16} />
-            {item.status === 'Disponível' && !mensagemSucesso ? 'Reivindicar Pertence' : `Item ${item.status}`}
-          </button>
-        </div>
+        {/* BOTÃO DE EDIÇÃO - Exclusivo para Administradores */}
+        {eAdmin && (
+          <div className="pt-1">
+            <button
+              onClick={() => navigate(`/editar-item/${item.id}`)}
+              className="w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-semibold rounded-xl text-xs shadow-sm transition flex items-center justify-center gap-2"
+            >
+              <Edit size={16} />
+              <span>Editar Item</span>
+            </button>
+          </div>
+        )}
+
+        {/* BOTÃO DE REIVINDICAÇÃO - Exclusivo para Alunos (Usuários Comuns) */}
+        {!eAdmin && (
+          <div className="pt-1">
+            <button
+              onClick={() => setIsModalOpen(true)}
+              disabled={statusAtual !== 'disponível' || mensagemSucesso}
+              className={`w-full py-2.5 rounded-xl font-semibold text-xs text-white transition flex items-center justify-center gap-2 ${
+                statusAtual === 'disponível' && !mensagemSucesso
+                  ? 'bg-indigo-900 hover:bg-indigo-800 active:scale-[0.98]'
+                  : 'bg-gray-300 cursor-not-allowed'
+              }`}
+            >
+              <ShieldCheck size={16} />
+              {statusAtual === 'disponível' && !mensagemSucesso ? 'Reivindicar Pertence' : `Item ${item.status}`}
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Modal de Prevenção de Erros */}
