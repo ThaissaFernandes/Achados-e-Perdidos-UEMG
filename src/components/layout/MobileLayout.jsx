@@ -46,9 +46,9 @@ export default function MobileLayout() {
 
           {/* Buscar */}
           <Link
-            to="/search"
+            to="/buscar"
             aria-label="Buscar objetos"
-            className={`flex flex-col items-center gap-1 min-w-[56px] transition-all active:scale-95 ${isActive('/search')}`}
+            className={`flex flex-col items-center gap-1 min-w-[56px] transition-all active:scale-95 ${isActive('/buscar')}`}
           >
             <Search size={22} />
             <span className="text-[11px] font-medium">Buscar</span>
