@@ -1,6 +1,8 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import ProtectedRoute from './routes/ProtectedRoute';
+import EditarItem from './pages/EditarItem'; 
+import Buscar from './pages/Buscar'; 
 
 import MobileLayout from './components/layout/MobileLayout';
 
@@ -17,7 +19,7 @@ export default function App() {
     <AuthProvider>
       <BrowserRouter>
         <Routes>
-          {/* Rotas de Autenticação (Abertas e Sem a barra de navegação inferior) */}
+          {/* Rotas de Autenticação */}
           <Route path="/login" element={<Login />} />
           <Route path="/cadastro" element={<Cadastro />} />
 
@@ -25,7 +27,7 @@ export default function App() {
           <Route path="/" element={<MobileLayout />}>
             {/* Rotas Públicas */}
             <Route index element={<Home />} />
-            <Route path="search" element={<Home />} />
+            <Route path="buscar" element={<Buscar />} /> 
 
             {/* Rotas Protegidas - Apenas Usuários Logados */}
             <Route element={<ProtectedRoute />}>
@@ -36,6 +38,7 @@ export default function App() {
             {/* Rotas Protegidas - Apenas Administrador */}
             <Route element={<ProtectedRoute requireAdmin={true} />}>
               <Route path="registrar-item" element={<RegistrarItem />} />
+              <Route path="editar-item/:id" element={<EditarItem />} />
             </Route>
           </Route>
         </Routes>
