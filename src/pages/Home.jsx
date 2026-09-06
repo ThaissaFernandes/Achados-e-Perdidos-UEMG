@@ -1,62 +1,37 @@
 import { useState, useEffect } from 'react';
-import { Search, Loader2, MapPin, Tag, ShieldAlert } from 'lucide-react';
-import ItemCard from '../components/ItemCard';
-import { listarItens } from '../services/itemService';
-import { listarCategorias } from '../services/categoriaService';
-import { listarLocaisAtivos } from '../services/localService';
+import { useNavigate } from 'react-router-dom';
+import { collection, getDocs, query, limit, orderBy } from 'firebase/firestore';
+import { db } from '../config/firebase';
 import { useAuth } from '../context/AuthContext';
+import ItemCard from '../components/ItemCard';
+import { Search, ShieldAlert, Loader2, ArrowRight, Info } from 'lucide-react';
 
 export default function Home() {
-  const { eAdmin } = useAuth();
-  const [items, setItems] = useState([]);
-  const [categorias, setCategorias] = useState([]);
-  const [locais, setLocais] = useState([]);
+  const { usuario, eAdmin } = useAuth();
+  const navigate = useNavigate();
+  const [recentes, setRecentes] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Estados dos Filtros
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState('todos');
-  const [categoriaSelecionada, setCategoriaSelecionada] = useState('');
-  const [localSelecionado, setLocalSelecionado] = useState('');
-
-  // Carrega e ordena categorias e locais do Firestore
+  // Busca apenas os itens mais recentes para a vitrine
   useEffect(() => {
-    async function carregarDados() {
+    async function carregarRecentes() {
       try {
-        const [dadosItens, dadosCategorias, dadosLocais] = await Promise.all([
-          listarItens(),
-          listarCategorias(),
-          listarLocaisAtivos()
-        ]);
-
-        setItems(dadosItens || []);
-
-        // Ordenação Alfabética das Categorias
-        const catOrdenadas = (dadosCategorias || []).sort((a, b) => {
-          const nomeA = a.name || a.nome || a.title || '';
-          const nomeB = b.name || b.nome || b.title || '';
-          return nomeA.localeCompare(nomeB, 'pt-BR', { numeric: true });
-        });
-
-        // Ordenação Alfabética/Numérica dos Locais
-        const locOrdenados = (dadosLocais || []).sort((a, b) => {
-          const nomeA = a.name || a.nome || a.title || '';
-          const nomeB = b.name || b.nome || b.title || '';
-          return nomeA.localeCompare(nomeB, 'pt-BR', { numeric: true });
-        });
-
-        setCategorias(catOrdenadas);
-        setLocais(locOrdenados);
-      } catch (error) {
-        console.error("Erro ao carregar dados do Firestore:", error);
+        const q = query(collection(db, 'itens'), limit(4));
+        const querySnapshot = await getDocs(q);
+        const lista = querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        setRecentes(lista);
+      } catch (err) {
+        console.error("Erro ao buscar itens recentes:", err);
       } finally {
         setLoading(false);
       }
     }
-    carregarDados();
+    carregarRecentes();
   }, []);
 
-  // Formata o Timestamp do Firestore para texto curto
   const formatarData = (item) => {
     const data = item.dataEncontrado || item.dataCadastro || item.data || item.dataRegistro;
     if (data?.seconds) {
@@ -65,46 +40,8 @@ export default function Home() {
         month: 'short'
       }).replace('.', '');
     }
-    if (typeof data === 'string') return data;
     return 'Recente';
   };
-
-  // Garante a exibição do NOME da categoria no card, mesmo que o banco salve apenas o ID
-  const obterNomeCategoria = (valorCategoria) => {
-    if (!valorCategoria) return 'Geral';
-    const catEncontrada = categorias.find(c => c.id === valorCategoria || (c.name || c.nome || c.title) === valorCategoria);
-    return catEncontrada ? (catEncontrada.name || catEncontrada.nome || catEncontrada.title) : valorCategoria;
-  };
-
-  // Lógica de filtragem resiliente
-  const filteredItems = items.filter(item => {
-    // 1. Pesquisa por Título ou Descrição
-    const titulo = (item.titulo || item.title || '').toLowerCase();
-    const descricao = (item.descricao || '').toLowerCase();
-    const busca = searchTerm.toLowerCase().trim();
-    const matchesSearch = !busca || titulo.includes(busca) || descricao.includes(busca);
-
-    // 2. Filtro por Status
-    const statusItem = (item.status || 'disponível').toLowerCase();
-    const matchesStatus = filterStatus === 'todos' || statusItem === filterStatus.toLowerCase();
-
-    // 3. Filtro por Categoria (Compara por Nome ou ID do documento)
-    const catItem = String(item.categoriaId || item.categoria || '').toLowerCase().trim();
-    const catObj = categorias.find(c => (c.name || c.nome || c.title) === categoriaSelecionada);
-    const idCatSelecionada = catObj ? String(catObj.id).toLowerCase().trim() : '';
-    const catFiltro = categoriaSelecionada.toLowerCase().trim();
-
-    const matchesCategoria = !categoriaSelecionada || 
-      catItem === catFiltro || 
-      (idCatSelecionada && catItem === idCatSelecionada);
-
-    // 4. Filtro por Local
-    const localItem = String(item.localEncontrado || item.local || item.location || '').toLowerCase().trim();
-    const localFiltro = localSelecionado.toLowerCase().trim();
-    const matchesLocal = !localSelecionado || localItem === localFiltro || localItem.includes(localFiltro);
-
-    return matchesSearch && matchesStatus && matchesCategoria && matchesLocal;
-  });
 
   return (
     <div className="space-y-4 max-w-md mx-auto pb-20">
@@ -125,136 +62,71 @@ export default function Home() {
         </div>
       )}
 
-      {/* Pesquisa por texto */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-        <input
-          type="text"
-          placeholder="Buscar pertence (ex: chave, caderno)..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-indigo-900 shadow-sm"
-        />
+      {/* Banner de Boas-Vindas / Acolhimento */}
+      <div className="bg-gradient-to-r from-indigo-900 to-indigo-800 text-white p-5 rounded-2xl shadow-sm space-y-2">
+        <h2 className="text-sm font-bold">Olá, {usuario?.nome || 'Estudante'}! 👋</h2>
+        <p className="text-[11px] text-indigo-100 leading-relaxed">
+          Perdeu ou esqueceu algum pertence no campus UEMG Divinópolis? Acesse o catálogo completo para filtrar por categorias e locais.
+        </p>
+        <button
+          onClick={() => navigate('/buscar')}
+          className="mt-1 bg-white text-indigo-900 px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 hover:bg-indigo-50 transition shadow-sm"
+        >
+          <Search size={14} /> Abrir Catálogo de Busca
+        </button>
       </div>
 
-      {/* Selects de Categoria e Local */}
-      <div className="grid grid-cols-2 gap-2 text-xs">
-        <div>
-          <label className="block text-[11px] font-semibold text-gray-600 mb-1 flex items-center gap-1">
-            <Tag size={12} /> Categoria
-          </label>
-          <select
-            value={categoriaSelecionada}
-            onChange={(e) => setCategoriaSelecionada(e.target.value)}
-            className="w-full p-2 bg-white border border-gray-200 rounded-xl text-xs outline-none focus:border-indigo-900 text-gray-700"
+      {/* Guia Rápida (caso não seja admin) */}
+      {!eAdmin && (
+        <div className="bg-blue-50 border border-blue-100 p-3.5 rounded-2xl space-y-1">
+          <div className="flex items-center gap-1.5 text-blue-900 font-bold text-xs">
+            <Info size={15} className="text-blue-700" />
+            Achou algo perdido?
+          </div>
+          <p className="text-[11px] text-blue-800 leading-relaxed">
+            Entregue o objeto diretamente na Administração do Campus para que a equipe realize o cadastro oficial.
+          </p>
+        </div>
+      )}
+
+      {/* Seção de Itens Recentes (Vitrine) */}
+      <div className="space-y-3 pt-1">
+        <div className="flex justify-between items-center">
+          <h3 className="text-xs font-bold text-gray-800 uppercase tracking-wider">Adicionados Recentemente</h3>
+          <button 
+            onClick={() => navigate('/buscar')}
+            className="text-[11px] text-indigo-900 font-semibold flex items-center gap-0.5 hover:underline"
           >
-            <option value="">Todas</option>
-            {categorias.map((cat) => {
-              const nomeCat = cat.name || cat.nome || cat.title;
-              return (
-                <option key={cat.id} value={nomeCat}>
-                  {nomeCat}
-                </option>
-              );
-            })}
-          </select>
+            Ver todos <ArrowRight size={12} />
+          </button>
         </div>
 
-        <div>
-          <label className="block text-[11px] font-semibold text-gray-600 mb-1 flex items-center gap-1">
-            <MapPin size={12} /> Local
-          </label>
-          <select
-            value={localSelecionado}
-            onChange={(e) => setLocalSelecionado(e.target.value)}
-            className="w-full p-2 bg-white border border-gray-200 rounded-xl text-xs outline-none focus:border-indigo-900 text-gray-700"
-          >
-            <option value="">Todos</option>
-            {locais.map((loc) => {
-              const nomeLoc = loc.name || loc.nome || loc.title;
-              return (
-                <option key={loc.id} value={nomeLoc}>
-                  {nomeLoc}
-                </option>
-              );
-            })}
-          </select>
-        </div>
-      </div>
-
-      {/* Filtros Rápidos de Status */}
-      {/* Filtros Rápidos de Status */}
-      <div className="flex gap-2 text-xs font-medium pt-1 overflow-x-auto no-scrollbar">
-        <button
-          onClick={() => setFilterStatus('todos')}
-          className={`px-3 py-1.5 rounded-lg border transition-colors shrink-0 ${
-            filterStatus === 'todos' 
-              ? 'bg-indigo-900 text-white border-indigo-900' 
-              : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
-          }`}
-        >
-          Todos
-        </button>
-        <button
-          onClick={() => setFilterStatus('disponível')}
-          className={`px-3 py-1.5 rounded-lg border transition-colors shrink-0 ${
-            filterStatus === 'disponível' 
-              ? 'bg-emerald-600 text-white border-emerald-600' 
-              : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
-          }`}
-        >
-          Disponíveis
-        </button>
-        <button
-          onClick={() => setFilterStatus('em análise')}
-          className={`px-3 py-1.5 rounded-lg border transition-colors shrink-0 ${
-            filterStatus === 'em análise' 
-              ? 'bg-amber-600 text-white border-amber-600' 
-              : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
-          }`}
-        >
-          Em Análise
-        </button>
-        <button
-          onClick={() => setFilterStatus('devolvido')}
-          className={`px-3 py-1.5 rounded-lg border transition-colors shrink-0 ${
-            filterStatus === 'devolvido' 
-              ? 'bg-rose-600 text-white border-rose-600' 
-              : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
-          }`}
-        >
-          Devolvidos
-        </button>
-      </div>
-
-      {/* Exibição dos Pertences */}
-      {loading ? (
-        <div className="flex flex-col items-center justify-center py-12 text-gray-500">
-          <Loader2 className="w-8 h-8 animate-spin text-indigo-900 mb-2" />
-          <p className="text-xs">Carregando pertences...</p>
-        </div>
-      ) : (
-        <div className="space-y-3 pt-1">
-          {filteredItems.length > 0 ? (
-            filteredItems.map(item => (
+        {loading ? (
+          <div className="flex justify-center py-10">
+            <Loader2 className="w-6 h-6 animate-spin text-indigo-900" />
+          </div>
+        ) : recentes.length > 0 ? (
+          <div className="space-y-3">
+            {recentes.map(item => (
               <ItemCard 
                 key={item.id} 
                 id={item.id}
                 title={item.titulo || item.title}
-                category={obterNomeCategoria(item.categoriaId || item.categoria)}
+                category={item.categoriaId || item.categoria || 'Geral'}
                 location={item.localEncontrado || item.local || item.location}
                 date={formatarData(item)}
                 status={item.status || 'Disponível'}
                 imageUrl={item.fotoUrl || item.imageUrl}
               />
-            ))
-          ) : (
-            <div className="text-center py-8 bg-white rounded-2xl border border-gray-100 text-gray-500 text-xs">
-              Nenhum pertence encontrado com os filtros aplicados.
-            </div>
-          )}
-        </div>
-      )}
+            ))}
+          </div>
+        ) : (
+          <div className="bg-white rounded-2xl p-6 text-center text-gray-400 text-xs border border-gray-100">
+            Nenhum item recente cadastrado.
+          </div>
+        )}
+      </div>
+
     </div>
   );
 }
