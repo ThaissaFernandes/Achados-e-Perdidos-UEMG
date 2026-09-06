@@ -1,5 +1,5 @@
 import { db } from '../config/firebase';
-import { collection, addDoc, getDocs, query, where } from 'firebase/firestore';
+import { collection, addDoc, getDocs, query, where, doc, deleteDoc, updateDoc } from 'firebase/firestore';
 
 const solicitacaoCollectionRef = collection(db, 'solicitacoesDevolucao');
 
@@ -21,3 +21,12 @@ export const listarMinhasSolicitacoes = async (usuarioId) => {
   const querySnapshot = await getDocs(q);
   return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 };
+
+export async function cancelarSolicitacao(solicitacaoId, itemId) {
+  // 1. Exclui o documento da solicitação
+  await deleteDoc(doc(db, 'solicitacoes', solicitacaoId));
+
+  // 2. Retorna o item associado para o status 'disponível'
+  const itemRef = doc(db, 'itens', itemId);
+  await updateDoc(itemRef, { status: 'disponível' });
+}

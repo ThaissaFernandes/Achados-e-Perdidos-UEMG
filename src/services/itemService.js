@@ -1,31 +1,30 @@
-import { db, storage } from '../config/firebase';
+import { db } from '../config/firebase';
 import { 
   collection, 
   addDoc, 
   getDocs, 
   doc, 
   updateDoc, 
+  deleteDoc, 
   query, 
   where, 
   serverTimestamp 
 } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 const itemCollectionRef = collection(db, 'itens');
 
-// Faz o upload da foto diretamente no Firebase Storage e retorna a URL permanente
+// Converte a imagem localmente para Base64 (100% gratuito, sem precisar do Firebase Storage / plano Blaze)
 export const uploadFotoItem = async (file) => {
   if (!file) return '';
-  try {
-    const fileName = `${Date.now()}_${file.name}`;
-    const storageRef = ref(storage, `itens/${fileName}`);
-    const snapshot = await uploadBytes(storageRef, file);
-    const downloadURL = await getDownloadURL(snapshot.ref);
-    return downloadURL;
-  } catch (error) {
-    console.error("Erro ao fazer upload da imagem:", error);
-    throw error;
-  }
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = (error) => {
+      console.error("Erro ao converter imagem para Base64:", error);
+      reject(error);
+    };
+  });
 };
 
 // Mapeia o método cadastrar() do Diagrama de Classes
@@ -73,6 +72,31 @@ export const atualizarStatusItem = async (itemId, novoStatus) => {
     await updateDoc(itemRef, { status: novoStatus.toLowerCase() });
   } catch (error) {
     console.error("Erro ao atualizar status do item:", error);
+    throw error;
+  }
+};
+
+// Mapeia a atualização completa de um item no Firestore
+export const atualizarItem = async (itemId, dadosAtualizados) => {
+  try {
+    const itemRef = doc(db, 'itens', itemId);
+    await updateDoc(itemRef, {
+      ...dadosAtualizados,
+      status: (dadosAtualizados.status || 'disponível').toLowerCase()
+    });
+  } catch (error) {
+    console.error("Erro ao atualizar item:", error);
+    throw error;
+  }
+};
+
+// Mapeia o método excluir() do Diagrama de Classes
+export const excluirItem = async (itemId) => {
+  try {
+    const itemRef = doc(db, 'itens', itemId);
+    await deleteDoc(itemRef);
+  } catch (error) {
+    console.error("Erro ao excluir item:", error);
     throw error;
   }
 };
