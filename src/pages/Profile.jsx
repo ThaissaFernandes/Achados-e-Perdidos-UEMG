@@ -55,7 +55,7 @@ export default function Profile() {
     setProcessandoId(solicitacaoId);
     try {
       // 1. Remove o documento da solicitação no Firestore
-      await deleteDoc(doc(db, 'solicitacoes', solicitacaoId));
+      await deleteDoc(doc(db, 'solicitacoesDevolucao', solicitacaoId));
 
       // 2. Se houver o ID do item vinculado, retorna o status dele para 'disponível'
       if (itemId) {

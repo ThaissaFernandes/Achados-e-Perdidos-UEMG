@@ -23,10 +23,24 @@ export const listarMinhasSolicitacoes = async (usuarioId) => {
 };
 
 export async function cancelarSolicitacao(solicitacaoId, itemId) {
-  // 1. Exclui o documento da solicitação
-  await deleteDoc(doc(db, 'solicitacoes', solicitacaoId));
+  try {
+    if (!solicitacaoId) {
+      throw new Error("ID da solicitação não foi fornecido.");
+    }
 
-  // 2. Retorna o item associado para o status 'disponível'
-  const itemRef = doc(db, 'itens', itemId);
-  await updateDoc(itemRef, { status: 'disponível' });
+    // 1. Exclui da coleção correta no Firestore (confirme se o nome é 'solicitacoesDevolucao' ou 'solicitacoes')
+    const solicitacaoRef = doc(db, 'solicitacoesDevolucao', solicitacaoId);
+    await deleteDoc(solicitacaoRef);
+
+    // 2. Retorna o item associado para o status 'disponível'
+    if (itemId) {
+      const itemRef = doc(db, 'itens', itemId);
+      await updateDoc(itemRef, { status: 'disponível' });
+    }
+
+    console.log("Sucesso ao deletar do Firebase!");
+  } catch (error) {
+    console.error("Erro crítico no Firebase ao excluir:", error);
+    throw error; // Joga o erro para o componente saber que falhou
+  }
 }
