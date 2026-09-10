@@ -60,10 +60,10 @@ export default function MobileLayout() {
               to="/registrar-item"
               aria-label="Cadastrar novo item"
               className={`flex flex-col items-center gap-1 min-w-[56px] transition-all active:scale-95 ${
-                location.pathname === '/registrar-item' ? 'text-amber-700 font-bold' : 'text-amber-600'
+                isActive('/registrar-item')}
               }`}
             >
-              <PlusCircle size={22} className="text-amber-600" />
+              <PlusCircle size={22} />
               <span className="text-[11px] font-medium">Cadastrar</span>
             </Link>
           )}
