@@ -4,13 +4,13 @@ import { signOut } from 'firebase/auth';
 import { collection, query, where, getDocs, doc, deleteDoc, updateDoc } from 'firebase/firestore';
 import { 
   User, Mail, LogOut, Shield, Clock, FileCheck, 
-  PackagePlus, MapPinPlus, Info, Loader2, XCircle 
+  PackagePlus, Info, Loader2, XCircle, Users 
 } from 'lucide-react';
 import { auth, db } from '../config/firebase';
 import { useAuth } from '../context/AuthContext';
 
 export default function Profile() {
-  const { usuario } = useAuth();
+  const { usuario, eAdmin } = useAuth();
   const navigate = useNavigate();
   
   const [solicitacoes, setSolicitacoes] = useState([]);
@@ -27,7 +27,7 @@ export default function Profile() {
 
       try {
         const q = query(
-          collection(db, 'solicitacoesDevolucao'), // Nome da coleção onde as solicitações são salvas
+          collection(db, 'solicitacoesDevolucao'),
           where('usuarioId', '==', usuario.uid)
         );
         const querySnapshot = await getDocs(q);
@@ -54,16 +54,16 @@ export default function Profile() {
 
     setProcessandoId(solicitacaoId);
     try {
-      // 1. Remove o documento da solicitação no Firestore
+      // 1. Remove a solicitação
       await deleteDoc(doc(db, 'solicitacoesDevolucao', solicitacaoId));
 
-      // 2. Se houver o ID do item vinculado, retorna o status dele para 'disponível'
+      // 2. Retorna o status do item para 'disponível'
       if (itemId) {
         const itemRef = doc(db, 'itens', itemId);
         await updateDoc(itemRef, { status: 'disponível' });
       }
 
-      // 3. Atualiza o estado local removendo a solicitação cancelada da tela
+      // 3. Atualiza a lista na UI
       setSolicitacoes(prev => prev.filter(sol => sol.id !== solicitacaoId));
     } catch (err) {
       console.error("Erro ao cancelar solicitação:", err);
@@ -82,146 +82,157 @@ export default function Profile() {
     }
   };
 
-  const isAdmin = usuario?.tipo === 'admin';
-
   return (
-    <div className="space-y-5 pb-20 max-w-md mx-auto">
+    <div className="space-y-6 pb-20 max-w-4xl mx-auto">
       
       {/* 1. Cartão do Usuário */}
-      <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className={`w-14 h-14 rounded-full flex items-center justify-center shrink-0 border ${
-            isAdmin ? 'bg-amber-50 border-amber-200' : 'bg-indigo-100 border-indigo-200'
+      <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-4 min-w-0 w-full sm:w-auto">
+          <div className={`w-14 h-14 md:w-16 md:h-16 rounded-2xl flex items-center justify-center shrink-0 border ${
+            eAdmin ? 'bg-amber-50 border-amber-200' : 'bg-indigo-50 border-indigo-200'
           }`}>
-            {isAdmin ? (
-              <Shield size={28} className="text-amber-700" />
+            {eAdmin ? (
+              <Shield size={30} className="text-amber-700" />
             ) : (
-              <User size={28} className="text-indigo-900" />
+              <User size={30} className="text-indigo-900" />
             )}
           </div>
           <div className="min-w-0 flex-1">
-            <h2 className="text-sm font-bold text-gray-900 truncate">
-              {usuario?.nome || 'Usuário UEMG'}
+            <h2 className="text-base md:text-lg font-bold text-gray-900 truncate">
+              {usuario?.nome || usuario?.displayName || 'Usuário UEMG'}
             </h2>
-            <p className="text-xs text-gray-500 flex items-center gap-1 truncate">
-              <Mail size={12} /> {usuario?.email || 'usuario@aluno.uemg.br'}
+            <p className="text-xs text-gray-500 flex items-center gap-1.5 truncate mt-0.5">
+              <Mail size={13} className="shrink-0 text-gray-400" /> {usuario?.email || 'usuario@aluno.uemg.br'}
             </p>
-            <span className={`inline-block mt-1 text-[10px] font-semibold px-2 py-0.5 rounded-md ${
-              isAdmin ? 'bg-amber-100 text-amber-800' : 'bg-indigo-50 text-indigo-700'
+            <span className={`inline-flex items-center gap-1 mt-1.5 text-[10px] md:text-xs font-semibold px-2.5 py-0.5 rounded-md ${
+              eAdmin ? 'bg-amber-100 text-amber-900' : 'bg-indigo-50 text-indigo-800'
             }`}>
-              {isAdmin ? 'Administrador — Campus Divinópolis' : 'Estudante — Campus Divinópolis'}
+              {eAdmin ? 'Administrador — Campus Divinópolis' : 'Estudante — Campus Divinópolis'}
             </span>
           </div>
         </div>
 
         <button
           onClick={handleLogout}
-          className="p-2.5 text-red-600 bg-red-50 hover:bg-red-100 rounded-xl transition-colors shrink-0"
+          className="w-full sm:w-auto px-4 py-2.5 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-100 rounded-xl transition flex items-center justify-center gap-2 shrink-0 active:scale-[0.98]"
           title="Sair da Conta"
         >
-          <LogOut size={18} />
+          <LogOut size={16} />
+          <span>Sair da Conta</span>
         </button>
       </div>
 
       {/* 2. PAINEL DO ADMINISTRADOR */}
-      {isAdmin ? (
-        <div className="bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200 p-4 rounded-2xl space-y-3">
-          <h3 className="text-xs font-bold text-amber-900 uppercase tracking-wider flex items-center gap-1.5">
-            <Shield size={16} className="text-amber-700" />
-            Painel de Gestão da Administração
-          </h3>
-          <p className="text-[11px] text-amber-800">
-            Cadastre pertences entregues no setor ou gerencie as opções do sistema.
-          </p>
+      {eAdmin ? (
+        <div className="bg-gradient-to-br from-amber-50/80 to-orange-50/50 border border-amber-200/80 p-5 md:p-6 rounded-2xl space-y-4 shadow-xs">
+          <div>
+            <h3 className="text-xs md:text-sm font-bold text-amber-900 uppercase tracking-wider flex items-center gap-2">
+              <Shield size={18} className="text-amber-700" />
+              Painel de Gestão da Administração
+            </h3>
+            <p className="text-xs text-amber-800 mt-1 leading-relaxed">
+              Gerencie o cadastro de pertences e controle as permissões dos administradores do campus.
+            </p>
+          </div>
 
-          <div className="grid grid-cols-2 gap-2 pt-1">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
             <button 
               onClick={() => navigate('/registrar-item')}
-              className="flex items-center justify-center gap-1.5 p-3 bg-amber-600 text-white font-semibold rounded-xl text-xs hover:bg-amber-700 transition shadow-sm col-span-2 active:scale-[0.98]"
+              className="flex items-center justify-center gap-2 p-3.5 bg-amber-600 text-white font-semibold rounded-xl text-xs md:text-sm hover:bg-amber-700 transition shadow-xs active:scale-[0.98]"
             >
-              <PackagePlus size={16} />
-              Cadastrar Novo Pertence
+              <PackagePlus size={18} />
+              <span>Cadastrar Novo Pertence</span>
+            </button>
+
+            <button 
+              onClick={() => navigate('/gerenciar-usuarios')}
+              className="flex items-center justify-center gap-2 p-3.5 bg-indigo-900 text-white font-semibold rounded-xl text-xs md:text-sm hover:bg-indigo-800 transition shadow-xs active:scale-[0.98]"
+            >
+              <Users size={18} />
+              <span>Gerenciar Administradores</span>
             </button>
           </div>
         </div>
       ) : (
         /* 3. GUIA RÁPIDA PARA O ESTUDANTE */
-        <div className="bg-blue-50 border border-blue-100 p-3.5 rounded-2xl space-y-1.5">
-          <div className="flex items-center gap-1.5 text-blue-900 font-bold text-xs">
-            <Info size={16} className="text-blue-700" />
-            Encontrou algum pertence perdido no campus?
+        <div className="bg-blue-50/80 border border-blue-100 p-4 rounded-2xl space-y-2 shadow-xs">
+          <div className="flex items-center gap-2 text-blue-900 font-bold text-xs md:text-sm">
+            <Info size={18} className="text-blue-700 shrink-0" />
+            <span>Encontrou algum pertence perdido no campus?</span>
           </div>
-          <p className="text-[11px] text-blue-800 leading-relaxed">
-            Entregue o objeto diretamente na <strong className="font-semibold">Administração do Campus</strong>. A equipe responsável fará o cadastro oficial no sistema para que o dono possa resgatá-lo.
+          <p className="text-xs text-blue-800 leading-relaxed">
+            Entregue o objeto diretamente no setor de <strong className="font-semibold">Achados e Perdidos (Administração)</strong>. A equipe realizará o registro oficial no sistema com foto para que o proprietário possa resgatá-lo.
           </p>
         </div>
       )}
 
       {/* 4. SEÇÃO DE SOLICITAÇÕES DE RETIRADA (Exclusivo Aluno) */}
-      {!isAdmin && (
-        <div className="space-y-3">
-          <h3 className="text-sm font-bold text-gray-800 flex items-center gap-1.5">
-            <Clock size={16} className="text-indigo-600" />
+      {!eAdmin && (
+        <div className="space-y-4">
+          <h3 className="text-xs md:text-sm font-bold text-gray-800 uppercase tracking-wider flex items-center gap-2">
+            <Clock size={18} className="text-indigo-900" />
             Minhas Solicitações de Retirada ({solicitacoes.length})
           </h3>
 
           {carregandoSolicitacoes ? (
-            <div className="flex justify-center py-6 text-gray-400">
-              <Loader2 className="w-6 h-6 animate-spin text-indigo-900" />
+            <div className="flex flex-col items-center justify-center py-10 text-gray-400">
+              <Loader2 className="w-7 h-7 animate-spin text-indigo-900 mb-2" />
+              <p className="text-xs">Carregando suas solicitações...</p>
             </div>
           ) : solicitacoes.length > 0 ? (
-            solicitacoes.map(sol => {
-              const statusLower = (sol.status || '').toLowerCase();
-              return (
-                <div key={sol.id} className="bg-white p-3.5 rounded-2xl border border-gray-100 shadow-sm space-y-3">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h4 className="text-xs font-bold text-gray-900">{sol.itemTitulo || 'Pertence'}</h4>
-                      <p className="text-[11px] text-gray-500 mt-0.5">Administração — Setor de Achados e Perdidos</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+              {solicitacoes.map(sol => {
+                const statusLower = (sol.status || '').toLowerCase();
+                return (
+                  <div key={sol.id} className="bg-white p-4 rounded-2xl border border-gray-100 shadow-xs space-y-3 flex flex-col justify-between">
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-start gap-2">
+                        <h4 className="text-xs md:text-sm font-bold text-gray-900 line-clamp-1">{sol.itemTitulo || 'Pertence'}</h4>
+                        <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-md uppercase shrink-0 ${
+                          statusLower === 'pendente' 
+                            ? 'bg-amber-100 text-amber-800' 
+                            : statusLower === 'aprovado' ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-600'
+                        }`}>
+                          {sol.status || 'Pendente'}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-gray-500">Setor de Achados e Perdidos — Administração</p>
+
+                      <div className="bg-indigo-50/50 border border-indigo-100 p-3 rounded-xl text-xs text-indigo-900 space-y-0.5">
+                        <p className="font-semibold">Aguardando conferência presencial.</p>
+                        <p className="text-[11px] text-indigo-700">
+                          Apresente sua matrícula e e-mail institucional no balcão de atendimento.
+                        </p>
+                      </div>
                     </div>
-                    <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase ${
-                      statusLower === 'pendente' 
-                        ? 'bg-amber-100 text-amber-800' 
-                        : statusLower === 'aprovado' ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-600'
-                    }`}>
-                      {sol.status || 'Pendente'}
-                    </span>
-                  </div>
 
-                  <div className="bg-indigo-50/50 border border-indigo-100 p-2.5 rounded-xl text-[11px] text-indigo-900 space-y-0.5">
-                    <p className="font-semibold">Aguardando conferência presencial.</p>
-                    <p className="text-[10px] text-indigo-700">
-                      Dirija-se ao balcão e apresente sua matrícula e e-mail institucional.
-                    </p>
-                  </div>
+                    <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                      <span className="text-[10px] text-gray-400 flex items-center gap-1">
+                        <FileCheck size={13} /> Registrado
+                      </span>
 
-                  <div className="flex items-center justify-between pt-1 border-t border-gray-50">
-                    <span className="text-[10px] text-gray-400 flex items-center gap-1">
-                      <FileCheck size={12} /> Solicitação registrada
-                    </span>
-
-                    {/* Botão de Cancelamento da Reivindicação */}
-                    <button
-                      onClick={() => handleCancelarSolicitacao(sol.id, sol.itemId)}
-                      disabled={processandoId === sol.id}
-                      className="text-[11px] font-semibold text-red-600 hover:text-red-700 hover:bg-red-50 px-2.5 py-1 rounded-lg transition flex items-center gap-1 disabled:opacity-50"
-                    >
-                      {processandoId === sol.id ? (
-                        <Loader2 size={12} className="animate-spin" />
-                      ) : (
-                        <XCircle size={13} />
-                      )}
-                      <span>Cancelar Pedido</span>
-                    </button>
+                      <button
+                        onClick={() => handleCancelarSolicitacao(sol.id, sol.itemId)}
+                        disabled={processandoId === sol.id}
+                        className="text-xs font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-50 px-2.5 py-1 rounded-lg transition flex items-center gap-1 disabled:opacity-50"
+                      >
+                        {processandoId === sol.id ? (
+                          <Loader2 size={13} className="animate-spin" />
+                        ) : (
+                          <XCircle size={14} />
+                        )}
+                        <span>Cancelar Pedido</span>
+                      </button>
+                    </div>
                   </div>
-                </div>
-              );
-            })
+                );
+              })}
+            </div>
           ) : (
-            <div className="bg-white rounded-2xl p-6 text-center space-y-2 border border-gray-100 shadow-sm">
-              <p className="text-xs text-gray-600 font-semibold">Você ainda não possui solicitações de retirada.</p>
-              <p className="text-[11px] text-gray-400">
-                Os itens que você reivindicar na tela inicial aparecerão listados aqui automaticamente.
+            <div className="bg-white rounded-2xl p-8 text-center space-y-1.5 border border-gray-100 shadow-xs">
+              <p className="text-xs md:text-sm text-gray-700 font-bold">Você ainda não possui solicitações ativas.</p>
+              <p className="text-xs text-gray-400 max-w-sm mx-auto">
+                Os pertences que você solicitar na vitrine aparecerão organizados nesta área para acompanhamento.
               </p>
             </div>
           )}
