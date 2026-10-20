@@ -1,10 +1,10 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
-import { getStorage } from 'firebase/storage'; // Adicionado para suportar o Storage
+import { getStorage } from 'firebase/storage';
 
-// Configuração do Firebase
-const firebaseConfig = {
+// Configuração do Firebase (com export para a instância secundária do modal)
+export const firebaseConfig = {
   apiKey: "AIzaSyATywq1q2moGJFdCkiPUTLuxA09040iGfA",
   authDomain: "achados-e-perdidos-uemg.firebaseapp.com",
   projectId: "achados-e-perdidos-uemg",
@@ -17,4 +17,4 @@ const app = initializeApp(firebaseConfig);
 
 export const auth = getAuth(app);
 export const db = getFirestore(app);
-export const storage = getStorage(app); // Adicionado para exportar o serviço de armazenamento
+export const storage = getStorage(app);
