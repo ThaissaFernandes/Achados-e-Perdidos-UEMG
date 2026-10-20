@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { auth, db } from '../config/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, onSnapshot } from 'firebase/firestore';
 
 const AuthContext = createContext({});
 
@@ -10,42 +10,63 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Escuta as mudanças no estado de autenticação do Firebase
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) {
-        try {
-          // Busca os dados complementares do perfil na coleção 'usuarios'
-          const docRef = doc(db, 'usuarios', firebaseUser.uid);
-          const docSnap = await getDoc(docRef);
+    let unsubscribeSnapshot = null;
 
-          if (docSnap.exists()) {
+    // Escuta alterações no estado de autenticação do Firebase
+    const unsubscribeAuth = onAuthStateChanged(auth, (firebaseUser) => {
+      if (firebaseUser) {
+        const docRef = doc(db, 'usuarios', firebaseUser.uid);
+
+        // Escuta atualizações do perfil no Firestore em tempo real
+        unsubscribeSnapshot = onSnapshot(
+          docRef,
+          (docSnap) => {
+            if (docSnap.exists()) {
+              const dadosDoc = docSnap.data();
+              setUsuario({
+                uid: firebaseUser.uid,
+                email: firebaseUser.email,
+                ...dadosDoc
+              });
+            } else {
+              setUsuario({
+                uid: firebaseUser.uid,
+                email: firebaseUser.email,
+                tipo: 'usuario',
+                eAdmin: false
+              });
+            }
+            setLoading(false);
+          },
+          (error) => {
+            console.error("Erro ao carregar dados do perfil em tempo real:", error);
             setUsuario({
               uid: firebaseUser.uid,
               email: firebaseUser.email,
-              ...docSnap.data() // traz nome, numeroCadastro, tipo, etc.
+              tipo: 'usuario',
+              eAdmin: false
             });
-          } else {
-            setUsuario({
-              uid: firebaseUser.uid,
-              email: firebaseUser.email,
-              tipo: 'usuario'
-            });
+            setLoading(false);
           }
-        } catch (error) {
-          console.error("Erro ao carregar dados do perfil:", error);
-          setUsuario(null);
-        }
+        );
       } else {
         setUsuario(null);
+        setLoading(false);
       }
-      setLoading(false);
     });
 
-    return () => unsubscribe();
+    // Limpa os listeners ao desmontar o componente
+    return () => {
+      unsubscribeAuth();
+      if (unsubscribeSnapshot) unsubscribeSnapshot();
+    };
   }, []);
 
+  // Compatibilidade flexível para identificar administradores
+  const eAdmin = usuario?.tipo === 'admin' || usuario?.eAdmin === true;
+
   return (
-    <AuthContext.Provider value={{ usuario, loading, eAdmin: usuario?.tipo === 'admin' }}>
+    <AuthContext.Provider value={{ usuario, loading, eAdmin }}>
       {children}
     </AuthContext.Provider>
   );
