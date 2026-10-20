@@ -130,7 +130,6 @@ export default function EditarItem() {
 
     try {
       const itemRef = doc(db, 'itens', id);
-      // Padronizado com os campos corretos em português utilizados no restante do sistema
       await updateDoc(itemRef, {
         titulo: formData.title.trim(),
         categoriaId: formData.category,
@@ -140,9 +139,7 @@ export default function EditarItem() {
       });
 
       setSubmitted(true);
-      setTimeout(() => {
-        navigate(`/item/${id}`);
-      }, 1500);
+      setTimeout(() => navigate(`/item/${id}`), 1500);
     } catch (err) {
       console.error("Erro ao salvar alterações:", err);
       setErro('Falha ao atualizar o item. Tente novamente.');
@@ -165,17 +162,17 @@ export default function EditarItem() {
   };
 
   return (
-    <div className="space-y-5 pb-20 max-w-md mx-auto p-4">
-      <div className="flex items-center gap-2">
+    <div className="space-y-5 pb-20 max-w-2xl mx-auto">
+      <div className="flex items-center gap-3">
         <button 
           onClick={() => navigate(-1)} 
-          className="p-1.5 rounded-xl text-gray-500 bg-white border border-gray-200 hover:bg-gray-50 transition-colors"
+          className="p-2 rounded-xl text-gray-500 bg-white border border-gray-200 hover:bg-gray-50 transition-colors"
         >
           <ArrowLeft size={18} />
         </button>
         <div>
-          <h2 className="text-base font-bold text-gray-800">Editar Pertence (Administração)</h2>
-          <p className="text-[11px] text-gray-500">Atualize o status ou características do objeto</p>
+          <h2 className="text-base md:text-lg font-bold text-gray-800">Editar Pertence (Administração)</h2>
+          <p className="text-xs text-gray-500">Atualize o status ou características do objeto</p>
         </div>
       </div>
 
@@ -185,15 +182,16 @@ export default function EditarItem() {
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-4 text-xs">
-        {/* Status do Pertence */}
+      {/* Form Container Card */}
+      <form onSubmit={handleSubmit} className="bg-white p-4 sm:p-6 rounded-2xl border border-gray-100 shadow-sm space-y-4 text-xs md:text-sm">
+        {/* Status */}
         <div className="space-y-1">
           <label className="font-semibold text-gray-700">Status do Pertence</label>
-          <div className="grid grid-cols-3 gap-1.5">
+          <div className="grid grid-cols-3 gap-2">
             <button
               type="button"
               onClick={() => setFormData({ ...formData, status: 'disponível' })}
-              className={`py-2 px-2 rounded-xl font-bold border text-[11px] transition-all ${
+              className={`py-2 px-2 rounded-xl font-bold border text-xs transition-all ${
                 formData.status === 'disponível'
                   ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
                   : 'bg-white text-gray-600 border-gray-200'
@@ -204,7 +202,7 @@ export default function EditarItem() {
             <button
               type="button"
               onClick={() => setFormData({ ...formData, status: 'em análise' })}
-              className={`py-2 px-2 rounded-xl font-bold border text-[11px] transition-all ${
+              className={`py-2 px-2 rounded-xl font-bold border text-xs transition-all ${
                 formData.status === 'em análise'
                   ? 'bg-amber-600 text-white border-amber-600 shadow-sm'
                   : 'bg-white text-gray-600 border-gray-200'
@@ -215,7 +213,7 @@ export default function EditarItem() {
             <button
               type="button"
               onClick={() => setFormData({ ...formData, status: 'devolvido' })}
-              className={`py-2 px-2 rounded-xl font-bold border text-[11px] transition-all ${
+              className={`py-2 px-2 rounded-xl font-bold border text-xs transition-all ${
                 formData.status === 'devolvido'
                   ? 'bg-rose-600 text-white border-rose-600 shadow-sm'
                   : 'bg-white text-gray-600 border-gray-200'
@@ -241,48 +239,49 @@ export default function EditarItem() {
           </div>
         </div>
 
-        {/* Categoria */}
-        <div className="space-y-1">
-          <label className="font-semibold text-gray-700">Categoria</label>
-          <select
-            required
-            value={formData.category}
-            onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-            className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl outline-none focus:border-indigo-900 text-gray-700"
-          >
-            <option value="">Selecione uma categoria...</option>
-            {categorias.map((cat) => {
-              const nomeCat = cat.name || cat.nome || cat.title;
-              return (
-                <option key={cat.id} value={nomeCat}>
-                  {nomeCat}
-                </option>
-              );
-            })}
-          </select>
-        </div>
-
-        {/* Local Encontrado */}
-        <div className="space-y-1">
-          <label className="font-semibold text-gray-700">Local Encontrado</label>
-          <div className="relative">
-            <MapPin size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+        {/* Categoria e Local (Lado a Lado no tablet/desktop) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="space-y-1">
+            <label className="font-semibold text-gray-700">Categoria</label>
             <select
               required
-              value={formData.location}
-              onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-              className="w-full pl-9 pr-3 py-2.5 bg-white border border-gray-200 rounded-xl outline-none focus:border-indigo-900 text-gray-700"
+              value={formData.category}
+              onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+              className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl outline-none focus:border-indigo-900 text-gray-700"
             >
-              <option value="">Selecione o local...</option>
-              {locais.map((loc) => {
-                const nomeLocal = loc.name || loc.nome || loc.title;
+              <option value="">Selecione uma categoria...</option>
+              {categorias.map((cat) => {
+                const nomeCat = cat.name || cat.nome || cat.title;
                 return (
-                  <option key={loc.id} value={nomeLocal}>
-                    {nomeLocal}
+                  <option key={cat.id} value={nomeCat}>
+                    {nomeCat}
                   </option>
                 );
               })}
             </select>
+          </div>
+
+          <div className="space-y-1">
+            <label className="font-semibold text-gray-700">Local Encontrado</label>
+            <div className="relative">
+              <MapPin size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <select
+                required
+                value={formData.location}
+                onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                className="w-full pl-9 pr-3 py-2.5 bg-white border border-gray-200 rounded-xl outline-none focus:border-indigo-900 text-gray-700"
+              >
+                <option value="">Selecione o local...</option>
+                {locais.map((loc) => {
+                  const nomeLocal = loc.name || loc.nome || loc.title;
+                  return (
+                    <option key={loc.id} value={nomeLocal}>
+                      {nomeLocal}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
           </div>
         </div>
 
@@ -318,29 +317,29 @@ export default function EditarItem() {
             </>
           )}
         </button>
+
+        {/* Zona de Perigo interna ao Card */}
+        <div className="pt-4 mt-4 border-t border-dashed border-gray-200 space-y-2">
+          <div>
+            <h4 className="text-xs font-bold text-gray-700">Zona de Perigo</h4>
+            <p className="text-[11px] text-gray-400">Ações irreversíveis para este registro</p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setIsDeleteModalOpen(true)}
+            className="w-full py-2.5 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 font-semibold rounded-xl transition flex justify-center items-center gap-2 text-xs shadow-xs active:scale-[0.98]"
+          >
+            <Trash2 size={16} className="text-red-600" />
+            <span>Excluir Este Registro do Sistema</span>
+          </button>
+        </div>
       </form>
 
-      {/* Seção de Zona de Perigo */}
-      <div className="pt-6 mt-6 border-t border-dashed border-gray-200 space-y-2">
-        <div>
-          <h4 className="text-xs font-bold text-gray-700">Zona de Perigo</h4>
-          <p className="text-[11px] text-gray-400">Ações irreversíveis para este registro</p>
-        </div>
-
-        <button
-          type="button"
-          onClick={() => setIsDeleteModalOpen(true)}
-          className="w-full py-2.5 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 font-semibold rounded-xl transition flex justify-center items-center gap-2 text-xs shadow-xs active:scale-[0.98]"
-        >
-          <Trash2 size={16} className="text-red-600" />
-          <span>Excluir Este Registro do Sistema</span>
-        </button>
-      </div>
-
-      {/* Modal de Confirmação de Exclusão Crítica */}
+      {/* Modal de Exclusão */}
       {isDeleteModalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl p-5 w-full max-w-sm shadow-2xl space-y-4 animate-in fade-in zoom-in duration-200">
+          <div className="bg-white rounded-2xl p-5 w-full max-w-sm shadow-2xl space-y-4">
             <div className="flex items-center gap-2.5 text-red-600">
               <div className="p-2.5 bg-red-100 rounded-xl">
                 <AlertTriangle size={22} />
