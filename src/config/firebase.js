@@ -3,14 +3,16 @@ import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 
-// Configuração do Firebase (com export para a instância secundária do modal)
+// Configuração lida das variáveis de ambiente do Vite (arquivo .env, não versionado).
+// A chave web do Firebase não é um segredo, mas manter a configuração fora do código
+// facilita trocar de projeto (teste/produção). A proteção real está nas Regras do Firestore.
 export const firebaseConfig = {
-  apiKey: "AIzaSyATywq1q2moGJFdCkiPUTLuxA09040iGfA",
-  authDomain: "achados-e-perdidos-uemg.firebaseapp.com",
-  projectId: "achados-e-perdidos-uemg",
-  storageBucket: "achados-e-perdidos-uemg.firebasestorage.app",
-  messagingSenderId: "839167316208",
-  appId: "1:839167316208:web:5f68a9b3b61b264938b235"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
 const app = initializeApp(firebaseConfig);
