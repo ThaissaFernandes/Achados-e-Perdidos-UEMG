@@ -7,11 +7,59 @@ html, body {
   box-sizing: border-box;
   background-color: #f9fafb; /* bg-gray-50 do Tailwind */
   font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  
+
   /* Evita rolagem horizontal e quebra de layout no mobile */
   max-width: 100vw;
   overflow-x: hidden;
   scroll-behavior: smooth;
+}
+
+/*
+ * Campos de formulário com 16px em telas pequenas.
+ * Abaixo disso o Safari do iPhone aplica zoom automático ao focar o campo,
+ * desorganizando o layout (Nielsen 5 - Prevenção de erros / usabilidade mobile).
+ * Esta regra fica fora das camadas do Tailwind, por isso vale sobre classes como text-xs.
+ */
+@media (max-width: 767px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* Foco visível e consistente para navegação por teclado (acessibilidade) */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid #4338ca; /* indigo-700 */
+  outline-offset: 2px;
+}
+
+/* Respeita a preferência do sistema por menos animações */
+@media (prefers-reduced-motion: reduce) {
+  html, body { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Link "Pular para o conteúdo": visível apenas ao receber foco pelo teclado */
+.skip-link {
+  position: absolute;
+  left: 0.75rem;
+  top: -4rem;
+  z-index: 100;
+  background: #fff;
+  color: #312e81;
+  font-weight: 700;
+  padding: 0.6rem 1rem;
+  border-radius: 0.75rem;
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.2);
+  transition: top 0.15s;
+}
+.skip-link:focus {
+  top: 0.75rem;
 }
 
 /* Esconde a barra de rolagem (utilizado nos filtros e tags horizontais no mobile) */
