@@ -1,5 +1,5 @@
 import { auth, db } from '../config/firebase';
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from 'firebase/auth';
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, sendPasswordResetEmail } from 'firebase/auth';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 
 // Cadastro de usuário
@@ -43,4 +43,9 @@ export const buscarPerfilUsuario = async (uid) => {
   const docRef = doc(db, 'usuarios', uid);
   const docSnap = await getDoc(docRef);
   return docSnap.exists() ? { id: docSnap.id, ...docSnap.data() } : null;
+};
+
+// Envia e-mail de redefinição de senha (Nielsen 3 e 10 - o usuário precisa de uma saída quando esquece a senha)
+export const enviarRedefinicaoSenha = async (email) => {
+  await sendPasswordResetEmail(auth, email);
 };
