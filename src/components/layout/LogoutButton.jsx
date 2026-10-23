@@ -1,6 +1,6 @@
 import { signOut } from 'firebase/auth';
 import { useNavigate } from 'react-router-dom';
-import { auth } from '../firebase'; // Ajuste o caminho até o seu arquivo firebase.js
+import { auth } from '../../config/firebase'; 
 
 export default function BotaoSair() {
   const navigate = useNavigate();
