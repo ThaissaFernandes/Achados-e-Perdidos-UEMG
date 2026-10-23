@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { collection, getDocs, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../hooks/useToast';
 import CriarAdminModal from '../components/CriarAdminModal';
 import { 
   ShieldCheck, 
@@ -18,6 +19,7 @@ import {
 
 export default function GerenciarUsuarios() {
   const navigate = useNavigate();
+  const toast = useToast();
   
   const { eAdmin, usuario: adminAtual, carregando, loading: authLoading } = useAuth();
   const emCarregamentoAuth = carregando || authLoading;
@@ -61,7 +63,7 @@ export default function GerenciarUsuarios() {
   // Função para alternar o status de Administrador
   const toggleStatusAdmin = async (targetUserId, eAdminAtual) => {
     if (targetUserId === adminAtual?.uid) {
-      alert('Não pode revogar o seu próprio acesso de administrador por aqui.');
+      toast.info('Você não pode revogar o seu próprio acesso de administrador por aqui.');
       return;
     }
 
@@ -84,7 +86,7 @@ export default function GerenciarUsuarios() {
       );
     } catch (err) {
       console.error('Erro ao atualizar permissão:', err);
-      alert('Erro ao atualizar permissão do utilizador.');
+      toast.erro('Não foi possível atualizar a permissão. Tente novamente.');
     } finally {
       setProcessandoId(null);
     }
@@ -93,7 +95,7 @@ export default function GerenciarUsuarios() {
   // Função para excluir utilizador do Firestore
   const excluirUsuario = async (targetUserId, nomeUsuario) => {
     if (targetUserId === adminAtual?.uid) {
-      alert('Não pode excluir a sua própria conta de administrador.');
+      toast.info('Você não pode excluir a sua própria conta de administrador.');
       return;
     }
 
@@ -111,10 +113,10 @@ export default function GerenciarUsuarios() {
 
       // Atualiza a lista local removendo o utilizador
       setUsuarios((prev) => prev.filter((u) => u.id !== targetUserId));
-      alert('Utilizador eliminado com sucesso!');
+      toast.sucesso('Usuário excluído com sucesso.');
     } catch (err) {
       console.error('Erro ao excluir utilizador:', err);
-      alert('Erro ao excluir o utilizador do sistema.');
+      toast.erro('Não foi possível excluir o usuário. Tente novamente.');
     } finally {
       setProcessandoId(null);
     }

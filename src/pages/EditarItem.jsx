@@ -186,14 +186,15 @@ export default function EditarItem() {
       <form onSubmit={handleSubmit} className="bg-white p-4 sm:p-6 rounded-2xl border border-gray-100 shadow-sm space-y-4 text-xs md:text-sm">
         {/* Status */}
         <div className="space-y-1">
-          <label className="font-semibold text-gray-700">Status do Pertence</label>
-          <div className="grid grid-cols-3 gap-2">
+          <span id="ed-status" className="font-semibold text-gray-800 block">Status do pertence</span>
+          <div role="group" aria-labelledby="ed-status" className="grid grid-cols-3 gap-2">
             <button
               type="button"
+              aria-pressed={formData.status === 'disponível'}
               onClick={() => setFormData({ ...formData, status: 'disponível' })}
-              className={`py-2 px-2 rounded-xl font-bold border text-xs transition-all ${
+              className={`min-h-11 py-2 px-2 rounded-xl font-bold border text-sm transition-all ${
                 formData.status === 'disponível'
-                  ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
+                  ? 'bg-emerald-700 text-white border-emerald-700 shadow-sm'
                   : 'bg-white text-gray-600 border-gray-200'
               }`}
             >
@@ -201,10 +202,11 @@ export default function EditarItem() {
             </button>
             <button
               type="button"
+              aria-pressed={formData.status === 'em análise'}
               onClick={() => setFormData({ ...formData, status: 'em análise' })}
-              className={`py-2 px-2 rounded-xl font-bold border text-xs transition-all ${
+              className={`min-h-11 py-2 px-2 rounded-xl font-bold border text-sm transition-all ${
                 formData.status === 'em análise'
-                  ? 'bg-amber-600 text-white border-amber-600 shadow-sm'
+                  ? 'bg-amber-700 text-white border-amber-700 shadow-sm'
                   : 'bg-white text-gray-600 border-gray-200'
               }`}
             >
@@ -212,10 +214,11 @@ export default function EditarItem() {
             </button>
             <button
               type="button"
+              aria-pressed={formData.status === 'devolvido'}
               onClick={() => setFormData({ ...formData, status: 'devolvido' })}
-              className={`py-2 px-2 rounded-xl font-bold border text-xs transition-all ${
+              className={`min-h-11 py-2 px-2 rounded-xl font-bold border text-sm transition-all ${
                 formData.status === 'devolvido'
-                  ? 'bg-rose-600 text-white border-rose-600 shadow-sm'
+                  ? 'bg-sky-700 text-white border-sky-700 shadow-sm'
                   : 'bg-white text-gray-600 border-gray-200'
               }`}
             >
@@ -226,10 +229,10 @@ export default function EditarItem() {
 
         {/* Título */}
         <div className="space-y-1">
-          <label className="font-semibold text-gray-700">Título / Nome</label>
+          <label htmlFor="ed-titulo" className="font-semibold text-gray-800">Título / Nome</label>
           <div className="relative">
-            <Tag size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input
+            <Tag size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+            <input id="ed-titulo"
               type="text"
               required
               value={formData.title}
@@ -242,8 +245,8 @@ export default function EditarItem() {
         {/* Categoria e Local (Lado a Lado no tablet/desktop) */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-1">
-            <label className="font-semibold text-gray-700">Categoria</label>
-            <select
+            <label htmlFor="ed-categoria" className="font-semibold text-gray-800">Categoria</label>
+            <select id="ed-categoria"
               required
               value={formData.category}
               onChange={(e) => setFormData({ ...formData, category: e.target.value })}
@@ -262,10 +265,10 @@ export default function EditarItem() {
           </div>
 
           <div className="space-y-1">
-            <label className="font-semibold text-gray-700">Local Encontrado</label>
+            <label htmlFor="ed-local" className="font-semibold text-gray-800">Local Encontrado</label>
             <div className="relative">
-              <MapPin size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              <select
+              <MapPin size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+              <select id="ed-local"
                 required
                 value={formData.location}
                 onChange={(e) => setFormData({ ...formData, location: e.target.value })}
@@ -287,10 +290,10 @@ export default function EditarItem() {
 
         {/* Detalhes */}
         <div className="space-y-1">
-          <label className="font-semibold text-gray-700">Detalhes Adicionais</label>
+          <label htmlFor="ed-detalhes" className="font-semibold text-gray-800">Detalhes Adicionais</label>
           <div className="relative">
-            <FileText size={16} className="absolute left-3 top-3 text-gray-400" />
-            <textarea
+            <FileText size={16} className="absolute left-3 top-3 text-gray-500" />
+            <textarea id="ed-detalhes"
               rows={3}
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
@@ -322,7 +325,7 @@ export default function EditarItem() {
         <div className="pt-4 mt-4 border-t border-dashed border-gray-200 space-y-2">
           <div>
             <h4 className="text-xs font-bold text-gray-700">Zona de Perigo</h4>
-            <p className="text-[11px] text-gray-400">Ações irreversíveis para este registro</p>
+            <p className="text-[11px] text-gray-500">Ações irreversíveis para este registro</p>
           </div>
 
           <button

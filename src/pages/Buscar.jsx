@@ -1,275 +1,347 @@
-import { useState, useEffect } from 'react';
-import { Search, Loader2, MapPin, Tag, X, FilterX, CheckCircle2, Clock, Package } from 'lucide-react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import {
+  Search,
+  MapPin,
+  Tag,
+  X,
+  FilterX,
+  CheckCircle2,
+  Clock,
+  Package,
+  PackageCheck,
+  AlertCircle,
+  ArrowUpDown,
+  RotateCcw,
+} from 'lucide-react';
 import ItemCard from '../components/ItemCard';
 import FiltroDropdown from '../components/FiltroDropdown';
 import { listarItens } from '../services/itemService';
 import { listarCategorias } from '../services/categoriaService';
 import { listarLocaisAtivos } from '../services/localService';
+import { normalizar } from '../utils/texto';
+import { obterChaveStatus } from '../utils/status';
+import { formatarDataCurta } from '../utils/data';
+
+const TAMANHO_PAGINA = 12;
+
+const OPCOES_STATUS = [
+  { id: 'todos', label: 'Todos', icon: Package },
+  { id: 'disponivel', label: 'Disponíveis', icon: CheckCircle2 },
+  { id: 'analise', label: 'Em análise', icon: Clock },
+  { id: 'devolvido', label: 'Devolvidos', icon: PackageCheck },
+];
+
+const nomeDe = (obj) => obj.name || obj.nome || obj.title || '';
 
 export default function Buscar() {
+  // Os filtros ficam na URL (ex.: /buscar?q=chave&status=disponivel). Assim, ao abrir um item e voltar,
+  // a pessoa encontra a busca como deixou (Nielsen 3 e 6), e o link da busca pode ser compartilhado.
+  const [params, setParams] = useSearchParams();
+  const [visiveis, setVisiveis] = useState(TAMANHO_PAGINA);
+  const searchTerm = params.get('q') || '';
+  const filterStatus = params.get('status') || 'todos';
+  const categoriaSelecionada = params.get('cat') || '';
+  const localSelecionado = params.get('local') || '';
+  const ordenacao = params.get('ord') || 'recentes'; // 'recentes' | 'antigos' | 'az'
+
+  const atualizarParam = useCallback(
+    (chave, valor, padrao = '') => {
+      setParams(
+        (atual) => {
+          const novo = new URLSearchParams(atual);
+          if (!valor || valor === padrao) novo.delete(chave);
+          else novo.set(chave, valor);
+          return novo;
+        },
+        { replace: true }
+      );
+      setVisiveis(TAMANHO_PAGINA);
+    },
+    [setParams]
+  );
+
   const [items, setItems] = useState([]);
   const [categorias, setCategorias] = useState([]);
   const [locais, setLocais] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [erro, setErro] = useState(false);
 
-  // Estados dos Filtros
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState('todos');
-  const [categoriaSelecionada, setCategoriaSelecionada] = useState('');
-  const [localSelecionado, setLocalSelecionado] = useState('');
+  // Carrega e ordena dados iniciais do Firestore
+  const carregarDados = useCallback(async () => {
+    setLoading(true);
+    setErro(false);
+    try {
+      const [dadosItens, dadosCategorias, dadosLocais] = await Promise.all([
+        listarItens(),
+        listarCategorias(),
+        listarLocaisAtivos(),
+      ]);
 
-  // Carrega e ordena itens, categorias e locais do Firestore
-  useEffect(() => {
-    async function carregarDados() {
-      try {
-        const [dadosItens, dadosCategorias, dadosLocais] = await Promise.all([
-          listarItens(),
-          listarCategorias(),
-          listarLocaisAtivos()
-        ]);
+      const porNome = (a, b) => nomeDe(a).localeCompare(nomeDe(b), 'pt-BR', { numeric: true });
 
-        setItems(dadosItens || []);
-
-        // Ordenação Alfabética das Categorias
-        const catOrdenadas = (dadosCategorias || []).sort((a, b) => {
-          const nomeA = a.name || a.nome || a.title || '';
-          const nomeB = b.name || b.nome || b.title || '';
-          return nomeA.localeCompare(nomeB, 'pt-BR', { numeric: true });
-        });
-
-        // Ordenação Alfabética/Numérica dos Locais
-        const locOrdenados = (dadosLocais || []).sort((a, b) => {
-          const nomeA = a.name || a.nome || a.title || '';
-          const nomeB = b.name || b.nome || b.title || '';
-          return nomeA.localeCompare(nomeB, 'pt-BR', { numeric: true });
-        });
-
-        setCategorias(catOrdenadas);
-        setLocais(locOrdenados);
-      } catch (error) {
-        console.error("Erro ao carregar dados do Firestore:", error);
-      } finally {
-        setLoading(false);
-      }
+      setItems(dadosItens || []);
+      setCategorias([...(dadosCategorias || [])].sort(porNome));
+      setLocais([...(dadosLocais || [])].sort(porNome));
+    } catch (error) {
+      console.error('Erro ao carregar dados do Firestore:', error);
+      setErro(true);
+    } finally {
+      setLoading(false);
     }
-    carregarDados();
   }, []);
 
-  // Formatação para as opções aceitas pelo FiltroDropdown
-  const opcoesCategorias = [
-    { id: '', nome: 'Todas as Categorias' },
-    ...categorias.map((cat) => {
-      const nomeCat = cat.name || cat.nome || cat.title;
-      return { id: nomeCat, nome: nomeCat };
-    })
-  ];
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    carregarDados();
+  }, [carregarDados]);
 
-  const opcoesLocais = [
-    { id: '', nome: 'Todos os Locais' },
-    ...locais.map((loc) => {
-      const nomeLoc = loc.name || loc.nome || loc.title;
-      return { id: nomeLoc, nome: nomeLoc };
-    })
-  ];
+  const opcoesCategorias = useMemo(
+    () => [{ id: '', nome: 'Todas as categorias' }, ...categorias.map((cat) => ({ id: nomeDe(cat), nome: nomeDe(cat) }))],
+    [categorias]
+  );
 
-  // Formata o Timestamp do Firestore para texto curto
-  const formatarData = (item) => {
-    const data = item.dataEncontrado || item.dataCadastro || item.data || item.dataRegistro;
-    if (data?.seconds) {
-      return new Date(data.seconds * 1000).toLocaleDateString('pt-BR', {
-        day: '2-digit',
-        month: 'short'
-      }).replace('.', '');
-    }
-    if (typeof data === 'string') return data;
-    return 'Recente';
-  };
+  const opcoesLocais = useMemo(
+    () => [{ id: '', nome: 'Todos os locais' }, ...locais.map((loc) => ({ id: nomeDe(loc), nome: nomeDe(loc) }))],
+    [locais]
+  );
 
-  // Garante a exibição do NOME da categoria no card
+  // Resgata o nome amigável da Categoria
   const obterNomeCategoria = (valorCategoria) => {
     if (!valorCategoria) return 'Geral';
-    const catEncontrada = categorias.find(c => c.id === valorCategoria || (c.name || c.nome || c.title) === valorCategoria);
-    return catEncontrada ? (catEncontrada.name || catEncontrada.nome || catEncontrada.title) : valorCategoria;
+    const cat = categorias.find((c) => c.id === valorCategoria || nomeDe(c) === valorCategoria);
+    return cat ? nomeDe(cat) : valorCategoria;
   };
 
-  // Verifica se há algum filtro ativo
-  const temFiltroAtivo = searchTerm || filterStatus !== 'todos' || categoriaSelecionada || localSelecionado;
+  const temFiltroAtivo = Boolean(searchTerm || filterStatus !== 'todos' || categoriaSelecionada || localSelecionado);
 
   const limparFiltros = () => {
-    setSearchTerm('');
-    setFilterStatus('todos');
-    setCategoriaSelecionada('');
-    setLocalSelecionado('');
+    setParams({}, { replace: true });
+    setVisiveis(TAMANHO_PAGINA);
   };
 
-  // Lógica de filtragem resiliente
-  const filteredItems = items.filter(item => {
-    const titulo = (item.titulo || item.title || '').toLowerCase();
-    const descricao = (item.descricao || '').toLowerCase();
-    const busca = searchTerm.toLowerCase().trim();
-    const matchesSearch = !busca || titulo.includes(busca) || descricao.includes(busca);
+  // Filtragem e ordenação (a busca por texto ignora acentos e maiúsculas: "eletronico" acha "Eletrônico")
+  const filteredAndSortedItems = useMemo(() => {
+    const busca = normalizar(searchTerm);
+    const catFiltro = normalizar(categoriaSelecionada);
+    const catObj = categorias.find((c) => nomeDe(c) === categoriaSelecionada);
+    const idCatSelecionada = catObj ? normalizar(catObj.id) : '';
+    const localFiltro = normalizar(localSelecionado);
 
-    const statusItem = (item.status || 'disponível').toLowerCase();
-    const matchesStatus = filterStatus === 'todos' || statusItem === filterStatus.toLowerCase();
+    const filtrados = items.filter((item) => {
+      const titulo = normalizar(item.titulo || item.title);
+      const descricao = normalizar(item.descricao);
+      const matchesSearch = !busca || titulo.includes(busca) || descricao.includes(busca);
 
-    const catItem = String(item.categoriaId || item.categoria || '').toLowerCase().trim();
-    const catObj = categorias.find(c => (c.name || c.nome || c.title) === categoriaSelecionada);
-    const idCatSelecionada = catObj ? String(catObj.id).toLowerCase().trim() : '';
-    const catFiltro = categoriaSelecionada.toLowerCase().trim();
+      const matchesStatus = filterStatus === 'todos' || obterChaveStatus(item.status) === filterStatus;
 
-    const matchesCategoria = !categoriaSelecionada || 
-      catItem === catFiltro || 
-      (idCatSelecionada && catItem === idCatSelecionada);
+      const catItem = normalizar(item.categoriaId || item.categoria);
+      const matchesCategoria = !categoriaSelecionada || catItem === catFiltro || (idCatSelecionada && catItem === idCatSelecionada);
 
-    const localItem = String(item.localEncontrado || item.local || item.location || '').toLowerCase().trim();
-    const localFiltro = localSelecionado.toLowerCase().trim();
-    const matchesLocal = !localSelecionado || localItem === localFiltro || localItem.includes(localFiltro);
+      const localItem = normalizar(item.localEncontrado || item.local || item.location);
+      const matchesLocal = !localSelecionado || localItem === localFiltro || localItem.includes(localFiltro);
 
-    return matchesSearch && matchesStatus && matchesCategoria && matchesLocal;
-  });
+      return matchesSearch && matchesStatus && matchesCategoria && matchesLocal;
+    });
+
+    return filtrados.sort((a, b) => {
+      if (ordenacao === 'az') {
+        return (a.titulo || a.title || '').localeCompare(b.titulo || b.title || '', 'pt-BR');
+      }
+      const secA = a.dataCadastro?.seconds || a.dataEncontrado?.seconds || 0;
+      const secB = b.dataCadastro?.seconds || b.dataEncontrado?.seconds || 0;
+      return ordenacao === 'antigos' ? secA - secB : secB - secA;
+    });
+  }, [items, searchTerm, filterStatus, categoriaSelecionada, localSelecionado, ordenacao, categorias]);
+
+  const itensVisiveis = filteredAndSortedItems.slice(0, visiveis);
+  const restantes = filteredAndSortedItems.length - itensVisiveis.length;
+
+  const textoContagem = loading
+    ? 'Carregando itens...'
+    : `${filteredAndSortedItems.length} ${filteredAndSortedItems.length === 1 ? 'pertence encontrado' : 'pertences encontrados'}`;
 
   return (
-    <div className="space-y-5 pb-8">
-      
-      {/* Título da Seção + Botão de Limpar Filtros */}
+    <div className="space-y-5 pb-24 sm:pb-8">
+      {/* Título da Seção + Ação de Limpar Filtros */}
       <div className="flex justify-between items-start gap-4">
         <div>
-          <h2 className="text-base md:text-xl font-bold text-gray-900">Catálogo de Busca</h2>
-          <p className="text-xs md:text-sm text-gray-500 mt-0.5">Filtre por termos, locais ou status dos pertences.</p>
+          <h1 className="text-xl font-bold text-gray-900">Catálogo de busca</h1>
+          <p className="text-sm text-gray-600 mt-0.5">Filtre por palavra, categoria, local ou situação do pertence.</p>
         </div>
 
         {temFiltroAtivo && (
           <button
             onClick={limparFiltros}
-            className="text-xs text-rose-600 hover:text-rose-700 font-semibold flex items-center gap-1.5 bg-rose-50 px-3 py-1.5 rounded-xl border border-rose-100 transition shadow-xs cursor-pointer"
+            aria-label="Limpar todos os filtros ativos"
+            className="text-sm text-rose-700 hover:text-rose-800 font-semibold flex items-center gap-1.5 bg-rose-50 px-3 min-h-11 rounded-xl border border-rose-100 transition shadow-xs cursor-pointer active:scale-95 shrink-0"
           >
-            <FilterX size={14} /> Limpar Filtros
+            <FilterX size={16} aria-hidden="true" /> Limpar filtros
           </button>
         )}
       </div>
 
-      {/* Container de Filtros Principal */}
-      <div className="bg-white p-4 rounded-3xl border border-gray-100 shadow-xs space-y-4">
-        
-        {/* Pesquisa por Texto */}
+      {/* Filtros */}
+      <div role="search" className="bg-white p-4 rounded-3xl border border-gray-100 shadow-xs space-y-4">
         <div className="relative">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500" size={18} aria-hidden="true" />
           <input
-            type="text"
-            placeholder="Buscar pertence (ex: chave, caderno)..."
+            type="search"
+            aria-label="Buscar pertence por palavra-chave"
+            placeholder="Buscar pertence (ex.: chave, caderno)..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-10 py-3 bg-gray-50/80 border border-gray-200 rounded-2xl text-xs md:text-sm outline-none focus:bg-white focus:border-indigo-900 focus:ring-2 focus:ring-indigo-900/10 transition-all"
+            onChange={(e) => atualizarParam('q', e.target.value)}
+            className="w-full min-h-12 pl-10 pr-12 py-3 bg-gray-50/80 border border-gray-200 rounded-2xl text-sm outline-hidden focus:bg-white focus:border-indigo-900 focus:ring-2 focus:ring-indigo-900/10 transition-all [&::-webkit-search-cancel-button]:hidden"
           />
           {searchTerm && (
-            <button 
-              onClick={() => setSearchTerm('')}
-              className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1 cursor-pointer"
+            <button
+              onClick={() => atualizarParam('q', '')}
+              aria-label="Limpar pesquisa"
+              className="absolute right-1 top-1/2 -translate-y-1/2 p-3 text-gray-500 hover:text-gray-700 cursor-pointer"
             >
-              <X size={16} />
+              <X size={18} aria-hidden="true" />
             </button>
           )}
         </div>
 
-        {/* Dropdowns Customizados (Categoria e Local do Firestore) */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 relative z-30">
           <FiltroDropdown
             label="Categoria"
             icone={Tag}
             opcoes={opcoesCategorias}
             selecionado={categoriaSelecionada}
-            onSelect={setCategoriaSelecionada}
+            onSelect={(v) => atualizarParam('cat', v)}
           />
-
           <FiltroDropdown
-            label="Local Encontrado"
+            label="Local encontrado"
             icone={MapPin}
             opcoes={opcoesLocais}
             selecionado={localSelecionado}
-            onSelect={setLocalSelecionado}
+            onSelect={(v) => atualizarParam('local', v)}
           />
         </div>
 
         {/* Filtros de Status */}
         <div className="pt-2 border-t border-gray-100 space-y-2">
-          <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider block">
-            Status do Pertence
+          <span id="rotulo-status" className="text-xs font-semibold text-gray-700 uppercase tracking-wider block">
+            Situação do pertence
           </span>
-          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none snap-x">
-            {[
-              { id: 'todos', label: 'Todos', icon: Package, color: 'indigo' },
-              { id: 'disponível', label: 'Disponíveis', icon: CheckCircle2, color: 'emerald' },
-              { id: 'em análise', label: 'Em Análise', icon: Clock, color: 'amber' },
-              { id: 'devolvido', label: 'Devolvidos', icon: X, color: 'rose' },
-            ].map((st) => {
+          <div role="group" aria-labelledby="rotulo-status" className="flex gap-2 overflow-x-auto pb-1 no-scrollbar snap-x">
+            {OPCOES_STATUS.map((st) => {
               const IconeSt = st.icon;
               const ativo = filterStatus === st.id;
-              
+
               return (
                 <button
                   key={st.id}
                   type="button"
-                  onClick={() => setFilterStatus(st.id)}
-                  className={`snap-start shrink-0 px-3.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
-                    ativo
-                      ? 'bg-indigo-900 text-white shadow-xs'
-                      : 'bg-gray-100/80 text-gray-600 hover:bg-gray-200/60'
+                  aria-pressed={ativo}
+                  onClick={() => atualizarParam('status', st.id, 'todos')}
+                  className={`snap-start shrink-0 min-h-11 px-4 rounded-xl text-sm font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                    ativo ? 'bg-indigo-900 text-white shadow-xs' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                   }`}
                 >
-                  <IconeSt size={14} />
+                  <IconeSt size={16} aria-hidden="true" />
                   <span>{st.label}</span>
                 </button>
               );
             })}
           </div>
         </div>
-
       </div>
 
-      {/* Resultados e Contagem */}
+      {/* Resultados, contagem e ordenação */}
       <div className="space-y-3 pt-1">
-        <div className="flex items-center justify-between px-1">
-          <span className="text-xs font-bold text-gray-700">
-            {loading ? 'Buscando...' : `${filteredItems.length} pertences encontrados`}
-          </span>
+        <div className="flex items-center justify-between px-1 gap-3">
+          <p className="text-sm font-bold text-gray-800" role="status" aria-live="polite">
+            {textoContagem}
+          </p>
+
+          <div className="flex items-center gap-1.5 text-sm text-gray-600">
+            <ArrowUpDown size={16} className="text-gray-500" aria-hidden="true" />
+            <label htmlFor="ordenacao" className="sr-only">
+              Ordenar resultados
+            </label>
+            <select
+              id="ordenacao"
+              value={ordenacao}
+              onChange={(e) => atualizarParam('ord', e.target.value, 'recentes')}
+              className="bg-transparent font-medium text-gray-800 outline-hidden cursor-pointer hover:text-indigo-900 min-h-11"
+            >
+              <option value="recentes">Mais recentes</option>
+              <option value="antigos">Mais antigos</option>
+              <option value="az">Nome (A-Z)</option>
+            </select>
+          </div>
         </div>
 
-        {/* Exibição dos Resultados em Grid Adaptável */}
         {loading ? (
-          <div className="flex flex-col items-center justify-center py-16 text-gray-400">
-            <Loader2 className="w-8 h-8 animate-spin text-indigo-900 mb-2" />
-            <p className="text-xs">Carregando catálogo...</p>
-          </div>
-        ) : filteredItems.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5 md:gap-4">
-            {filteredItems.map(item => (
-              <ItemCard 
-                key={item.id} 
-                id={item.id}
-                title={item.titulo || item.title}
-                category={obterNomeCategoria(item.categoriaId || item.categoria)}
-                location={item.localEncontrado || item.local || item.location}
-                date={formatarData(item)}
-                status={item.status || 'Disponível'}
-                imageUrl={item.fotoUrl || item.imageUrl}
-              />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5 md:gap-4" aria-hidden="true">
+            {[1, 2, 3, 4, 5, 6].map((n) => (
+              <div key={n} className="bg-white border border-gray-100 rounded-3xl p-4 space-y-3 animate-pulse">
+                <div className="w-full h-24 bg-gray-100 rounded-2xl" />
+                <div className="h-4 bg-gray-100 rounded-md w-3/4" />
+                <div className="h-3 bg-gray-100 rounded-md w-1/2" />
+              </div>
             ))}
           </div>
+        ) : erro ? (
+          <div className="bg-rose-50 border border-rose-100 text-rose-800 rounded-3xl p-8 text-center space-y-3" role="alert">
+            <AlertCircle className="w-8 h-8 mx-auto text-rose-500" aria-hidden="true" />
+            <div>
+              <p className="font-bold">Falha ao carregar o catálogo de pertences.</p>
+              <p className="text-sm text-rose-700 mt-1">Verifique a conexão de rede e tente novamente.</p>
+            </div>
+            <button
+              onClick={carregarDados}
+              className="inline-flex items-center gap-1.5 px-4 min-h-11 bg-rose-600 text-white rounded-xl text-sm font-bold shadow-xs hover:bg-rose-700 transition cursor-pointer"
+            >
+              <RotateCcw size={16} aria-hidden="true" /> Tentar novamente
+            </button>
+          </div>
+        ) : filteredAndSortedItems.length > 0 ? (
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5 md:gap-4">
+              {itensVisiveis.map((item) => (
+                <ItemCard
+                  key={item.id}
+                  id={item.id}
+                  title={item.titulo || item.title}
+                  category={obterNomeCategoria(item.categoriaId || item.categoria)}
+                  location={item.localEncontrado || item.local || item.location}
+                  date={formatarDataCurta(item)}
+                  status={item.status || 'disponível'}
+                  imageUrl={item.fotoUrl || item.imageUrl}
+                />
+              ))}
+            </div>
+
+            {restantes > 0 && (
+              <div className="flex flex-col items-center gap-1 pt-2">
+                <button
+                  onClick={() => setVisiveis((v) => v + TAMANHO_PAGINA)}
+                  className="min-h-12 px-6 bg-white border border-gray-300 text-indigo-900 rounded-xl text-sm font-bold hover:bg-indigo-50 transition cursor-pointer"
+                >
+                  Mostrar mais ({restantes} {restantes === 1 ? 'restante' : 'restantes'})
+                </button>
+              </div>
+            )}
+          </>
         ) : (
-          <div className="col-span-full text-center py-12 bg-white rounded-3xl border border-gray-100 text-gray-400 text-xs md:text-sm shadow-xs space-y-3">
-            <p className="font-semibold text-gray-600">Nenhum pertence encontrado com os filtros aplicados.</p>
+          <div className="text-center py-12 bg-white rounded-3xl border border-gray-100 text-gray-600 text-sm shadow-xs space-y-3 px-4">
+            <p className="font-semibold text-gray-800">Nenhum pertence encontrado com esses filtros.</p>
+            <p>Tente buscar por uma palavra mais curta ou remover algum filtro.</p>
             {temFiltroAtivo && (
               <button
                 onClick={limparFiltros}
-                className="mt-1 inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-50 text-indigo-900 rounded-xl font-bold text-xs hover:bg-indigo-100 transition cursor-pointer"
+                className="mt-1 inline-flex items-center gap-1.5 px-4 min-h-11 bg-indigo-50 text-indigo-900 rounded-xl font-bold text-sm hover:bg-indigo-100 transition cursor-pointer"
               >
-                <FilterX size={14} /> Redefinir Filtros
+                <FilterX size={16} aria-hidden="true" /> Redefinir filtros
               </button>
             )}
           </div>
         )}
       </div>
-
     </div>
   );
 }
