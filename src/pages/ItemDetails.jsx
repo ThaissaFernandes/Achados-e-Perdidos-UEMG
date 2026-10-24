@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../hooks/useToast';
 import { solicitarRetiradaItem, ItemIndisponivelError } from '../services/solicitacaoService';
 import { obterChaveStatus } from '../utils/status';
+import { METODO_LOGIN } from '../services/usuarioService';
 import StatusBadge from '../components/StatusBadge';
 import Modal from '../components/Modal';
 import CodigoRetirada from '../components/CodigoRetirada';
@@ -275,19 +276,40 @@ export default function ItemDetails() {
                 className="w-full min-h-12 py-3 bg-indigo-900 hover:bg-indigo-800 text-white font-semibold rounded-xl text-sm shadow-xs transition flex items-center justify-center gap-2"
               >
                 <LogIn size={18} aria-hidden="true" />
-                Entrar para solicitar a retirada
+                {METODO_LOGIN === 'microsoft' ? 'Entrar com Microsoft para solicitar a retirada' : 'Entrar para solicitar a retirada'}
               </Link>
               <p className="text-xs text-gray-600 text-center">
-                Não tem conta?{' '}
-                <Link to="/cadastro" state={{ from: caminhoAtual }} className="font-bold text-indigo-900 underline">
-                  Cadastre-se
-                </Link>
+                {METODO_LOGIN === 'microsoft' ? (
+                  'Use sua conta institucional da UEMG.'
+                ) : (
+                  <>
+                    Não tem conta?{' '}
+                    <Link to="/cadastro" state={{ from: caminhoAtual }} className="font-bold text-indigo-900 underline">
+                      Cadastre-se
+                    </Link>
+                  </>
+                )}
               </p>
             </div>
           )}
 
+          {/* Ação - Entrou com a Microsoft, mas falta informar a matrícula */}
+          {!eAdmin && usuario?.perfilIncompleto && (
+            <div className="pt-2 space-y-2">
+              <Link
+                to="/completar-cadastro"
+                state={{ from: caminhoAtual }}
+                className="w-full min-h-12 py-3 bg-amber-700 hover:bg-amber-800 text-white font-semibold rounded-xl text-sm shadow-xs transition flex items-center justify-center gap-2"
+              >
+                <ClipboardList size={18} aria-hidden="true" />
+                Informar matrícula para solicitar
+              </Link>
+              <p className="text-xs text-gray-600 text-center">É preciso concluir o cadastro antes de solicitar um item.</p>
+            </div>
+          )}
+
           {/* Ação - Aluno logado */}
-          {!eAdmin && usuario && (
+          {!eAdmin && usuario && !usuario.perfilIncompleto && (
             <div className="pt-2 space-y-2">
               <button
                 onClick={() => setIsModalOpen(true)}
