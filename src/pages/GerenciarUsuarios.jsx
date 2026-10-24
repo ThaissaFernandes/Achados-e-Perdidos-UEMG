@@ -1,20 +1,21 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, getDocs, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../hooks/useToast';
-import CriarAdminModal from '../components/CriarAdminModal';
+import { excluirPerfilUsuario, sincronizarMatriculas } from '../services/usuarioService';
+import Modal from '../components/Modal';
 import { 
   ShieldCheck, 
   ShieldAlert, 
   Search, 
   UserCheck, 
   UserX, 
-  UserPlus, 
   Loader2, 
   ArrowLeft,
-  Trash2
+  Trash2,
+  IdCard
 } from 'lucide-react';
 
 export default function GerenciarUsuarios() {
@@ -28,7 +29,8 @@ export default function GerenciarUsuarios() {
   const [busca, setBusca] = useState('');
   const [loading, setLoading] = useState(true);
   const [processandoId, setProcessandoId] = useState(null);
-  const [modalAdminAberto, setModalAdminAberto] = useState(false);
+  const [verificandoMatriculas, setVerificandoMatriculas] = useState(false);
+  const [resultadoMatriculas, setResultadoMatriculas] = useState(null);
 
   // Redireciona APENAS após terminar de carregar a autenticação e confirmar que NÃO é admin
   useEffect(() => {
@@ -92,8 +94,29 @@ export default function GerenciarUsuarios() {
     }
   };
 
+  // Registra as matrículas de contas antigas na coleção de unicidade e aponta números repetidos
+  const verificarMatriculas = async () => {
+    setVerificandoMatriculas(true);
+    try {
+      const resultado = await sincronizarMatriculas(usuarios);
+      setResultadoMatriculas(resultado);
+    } catch (err) {
+      console.error('Erro ao verificar matrículas:', err);
+      toast.erro('Não foi possível verificar as matrículas. Confira as regras de acesso do Firestore e tente de novo.');
+    } finally {
+      setVerificandoMatriculas(false);
+    }
+  };
+
+  const nomeDoUsuario = (id) => {
+    const u = usuarios.find((x) => x.id === id);
+    return u ? `${u.nome || u.displayName || 'Sem nome'} (${u.email || 'sem e-mail'})` : 'Conta não encontrada';
+  };
+
   // Função para excluir utilizador do Firestore
-  const excluirUsuario = async (targetUserId, nomeUsuario) => {
+  const excluirUsuario = async (alvo) => {
+    const targetUserId = alvo.id;
+    const nomeUsuario = alvo.nome || alvo.displayName;
     if (targetUserId === adminAtual?.uid) {
       toast.info('Você não pode excluir a sua própria conta de administrador.');
       return;
@@ -108,8 +131,8 @@ export default function GerenciarUsuarios() {
     setProcessandoId(targetUserId);
 
     try {
-      // Remove o documento da coleção "usuarios" no Firestore
-      await deleteDoc(doc(db, 'usuarios', targetUserId));
+      // Remove o perfil e libera a matrícula/registro para um novo cadastro
+      await excluirPerfilUsuario({ id: targetUserId, numeroCadastro: alvo.numeroCadastro || alvo.matricula });
 
       // Atualiza a lista local removendo o utilizador
       setUsuarios((prev) => prev.filter((u) => u.id !== targetUserId));
@@ -169,7 +192,7 @@ export default function GerenciarUsuarios() {
             Gestão de Administradores
           </h1>
           <p className="text-xs md:text-sm text-gray-500 mt-0.5">
-            Cadastre novos gestores, altere permissões ou remova utilizadores do sistema
+            Para criar um administrador, a pessoa entra uma vez com a conta Microsoft e conclui o cadastro. Depois, conceda a permissão na lista abaixo.
           </p>
         </div>
 
@@ -179,14 +202,15 @@ export default function GerenciarUsuarios() {
             <span className="font-semibold">Setor Administrativo</span>
           </div>
 
-          {/* Botão de Abrir Modal para Criar Admin */}
           <button
-            onClick={() => setModalAdminAberto(true)}
-            className="bg-indigo-900 text-white px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 hover:bg-indigo-800 transition shadow-xs cursor-pointer active:scale-[0.98]"
+            onClick={verificarMatriculas}
+            disabled={verificandoMatriculas || loading}
+            className="bg-white border border-gray-300 text-gray-800 px-4 py-2.5 min-h-11 rounded-xl text-xs font-bold flex items-center gap-2 hover:bg-gray-50 transition shadow-xs cursor-pointer active:scale-[0.98] disabled:opacity-60"
           >
-            <UserPlus size={16} />
-            <span>Novo Admin</span>
+            {verificandoMatriculas ? <Loader2 size={16} className="animate-spin" /> : <IdCard size={16} />}
+            <span>Verificar matrículas</span>
           </button>
+
         </div>
       </div>
 
@@ -278,7 +302,7 @@ export default function GerenciarUsuarios() {
 
                         {/* Botão de Excluir Utilizador */}
                         <button
-                          onClick={() => excluirUsuario(u.id, u.nome || u.displayName)}
+                          onClick={() => excluirUsuario(u)}
                           disabled={processandoId === u.id}
                           title="Excluir utilizador"
                           className="p-2 rounded-xl text-xs font-semibold bg-gray-100 text-gray-600 hover:bg-rose-100 hover:text-rose-700 transition cursor-pointer border border-gray-200 active:scale-95"
@@ -299,13 +323,52 @@ export default function GerenciarUsuarios() {
         </div>
       </div>
 
-      {/* Modal para Cadastro Direto de Administradores */}
-      <CriarAdminModal
-        isOpen={modalAdminAberto}
-        onClose={() => setModalAdminAberto(false)}
-        onSucesso={carregarUsuarios}
-      />
 
+      {/* Resultado da verificação de matrículas */}
+      <Modal
+        aberto={Boolean(resultadoMatriculas)}
+        onFechar={() => setResultadoMatriculas(null)}
+        titulo="Verificação de matrículas"
+        larguraMax="max-w-lg"
+      >
+        {resultadoMatriculas && (
+          <div className="space-y-3 text-sm text-gray-700">
+            <ul className="space-y-1 bg-gray-50 border border-gray-100 rounded-xl p-3">
+              <li><strong>{resultadoMatriculas.registradas}</strong> matrícula(s) registrada(s) agora</li>
+              <li><strong>{resultadoMatriculas.jaRegistradas}</strong> já estavam registradas</li>
+              <li><strong>{resultadoMatriculas.semNumero.length}</strong> conta(s) sem matrícula informada</li>
+              <li className={resultadoMatriculas.conflitos.length ? 'text-rose-700 font-semibold' : ''}>
+                <strong>{resultadoMatriculas.conflitos.length}</strong> número(s) repetido(s)
+              </li>
+            </ul>
+
+            {resultadoMatriculas.conflitos.length > 0 && (
+              <div className="space-y-2">
+                <p className="font-semibold text-rose-800">
+                  Estas contas usam o mesmo número. Decida qual é a correta e exclua a outra:
+                </p>
+                {resultadoMatriculas.conflitos.map((c) => (
+                  <div key={`${c.chave}-${c.usuarioId}`} className="border border-rose-200 bg-rose-50 rounded-xl p-3 text-xs space-y-1">
+                    <p className="font-bold text-rose-900">Número {c.chave}</p>
+                    <p>1. {nomeDoUsuario(c.donoId)}</p>
+                    <p>2. {nomeDoUsuario(c.usuarioId)}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {resultadoMatriculas.conflitos.length === 0 && (
+              <p className="text-emerald-800 font-semibold">Nenhuma matrícula repetida. A partir de agora o sistema impede duplicatas.</p>
+            )}
+          </div>
+        )}
+        <button
+          onClick={() => setResultadoMatriculas(null)}
+          className="w-full min-h-12 py-2.5 bg-indigo-900 text-white rounded-xl font-semibold text-sm hover:bg-indigo-800 transition"
+        >
+          Fechar
+        </button>
+      </Modal>
     </div>
   );
 }

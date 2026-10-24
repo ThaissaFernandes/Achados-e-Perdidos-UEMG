@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { ToastProvider } from './context/ToastProvider';
 import ProtectedRoute from './routes/ProtectedRoute';
@@ -12,7 +12,9 @@ import EditarItem from './pages/EditarItem';
 import Profile from './pages/Profile';
 import ItemDetails from './pages/ItemDetails';
 import Login from './pages/Login';
+import CompletarCadastro from './pages/CompletarCadastro';
 import Cadastro from './pages/Cadastro';
+import { METODO_LOGIN } from './services/usuarioService';
 import GerenciarUsuarios from './pages/GerenciarUsuarios';
 import Pedidos from './pages/Pedidos';
 
@@ -24,7 +26,12 @@ export default function App() {
           <Routes>
             {/* Rotas de Autenticação (Sem o layout do MobileLayout) */}
             <Route path="/login" element={<Login />} />
-            <Route path="/cadastro" element={<Cadastro />} />
+            <Route path="/completar-cadastro" element={<CompletarCadastro />} />
+            {/* Com login Microsoft não há cadastro por e-mail e senha: quem entra já é identificado pela Microsoft */}
+            <Route
+              path="/cadastro"
+              element={METODO_LOGIN === 'senha' ? <Cadastro /> : <Navigate to="/login" replace />}
+            />
 
             {/* Layout Principal (Com Header, Navegação Superior e Rodapé/BottomNav) */}
             <Route path="/" element={<MobileLayout />}>

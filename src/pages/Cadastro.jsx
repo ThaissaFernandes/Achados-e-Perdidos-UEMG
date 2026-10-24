@@ -1,10 +1,14 @@
 import { useState } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
-import { cadastrarUsuario } from '../services/usuarioService';
+import {
+  cadastrarComSenha,
+  MatriculaEmUsoError,
+  DominioNaoPermitidoError,
+  MIN_DIGITOS_MATRICULA,
+  MODO_RESTRITO_UEMG,
+} from '../services/usuarioService';
 import CampoSenha from '../components/CampoSenha';
 import { User, Mail, IdCard, UserPlus, AlertCircle, Loader2, Building2, ArrowLeft } from 'lucide-react';
-
-const EMAIL_INSTITUCIONAL = /@([a-z0-9-]+\.)*uemg\.br$/i;
 
 export default function Cadastro() {
   const [nome, setNome] = useState('');
@@ -13,23 +17,27 @@ export default function Cadastro() {
   const [senha, setSenha] = useState('');
   const [confirmarSenha, setConfirmarSenha] = useState('');
   const [erro, setErro] = useState('');
+  const [erroMatricula, setErroMatricula] = useState('');
   const [carregando, setCarregando] = useState(false);
 
   const navigate = useNavigate();
   const location = useLocation();
   const destino = location.state?.from || '/';
 
-  // Validações em tempo real: o usuário descobre o problema enquanto digita, não só depois de enviar
-  // (Nielsen 5 - Prevenção de erros).
-  const emailPreenchido = email.trim().length > 0;
-  const emailForaDoPadrao = emailPreenchido && !EMAIL_INSTITUCIONAL.test(email.trim());
+  // Validações em tempo real: a pessoa descobre o problema enquanto digita (Nielsen 5)
+  const matriculaCurta = numeroCadastro.length > 0 && numeroCadastro.length < MIN_DIGITOS_MATRICULA;
   const senhaCurta = senha.length > 0 && senha.length < 6;
   const senhasDiferentes = confirmarSenha.length > 0 && senha !== confirmarSenha;
 
   const handleCadastro = async (e) => {
     e.preventDefault();
     setErro('');
+    setErroMatricula('');
 
+    if (numeroCadastro.length < MIN_DIGITOS_MATRICULA) {
+      setErroMatricula(`A matrícula ou registro precisa ter pelo menos ${MIN_DIGITOS_MATRICULA} números.`);
+      return;
+    }
     if (senha.length < 6) {
       setErro('A senha precisa ter pelo menos 6 caracteres.');
       return;
@@ -41,21 +49,23 @@ export default function Cadastro() {
 
     setCarregando(true);
     try {
-      await cadastrarUsuario({
+      await cadastrarComSenha({
         email: email.trim(),
         senha,
         nome: nome.trim(),
-        numeroCadastro: numeroCadastro.trim(),
-        tipo: 'usuario',
-        eAdmin: false,
+        numeroCadastro,
       });
       navigate(destino, { replace: true });
     } catch (err) {
-      console.error('Erro detalhado do Firebase:', err);
+      console.error('Erro ao cadastrar:', err);
 
-      // Mensagens em linguagem do usuário, sem termos técnicos (Nielsen 9)
-      if (err.code === 'auth/email-already-in-use') {
-        setErro('Este e-mail já está cadastrado. Tente entrar ou use "Esqueci minha senha" na tela de login.');
+      if (err instanceof MatriculaEmUsoError) {
+        setErroMatricula('Esta matrícula ou registro já está cadastrada em outra conta. Confira o número digitado.');
+        setErro('Seu cadastro não foi concluído. Se o número estiver correto, procure a administração.');
+      } else if (err instanceof DominioNaoPermitidoError) {
+        setErro('Use o e-mail institucional da UEMG (terminado em @discente.uemg.br ou @uemg.br).');
+      } else if (err.code === 'auth/email-already-in-use') {
+        setErro('Este e-mail já está cadastrado. Volte e entre com ele.');
       } else if (err.code === 'auth/weak-password') {
         setErro('A senha é muito fraca. Use pelo menos 6 caracteres.');
       } else if (err.code === 'auth/invalid-email') {
@@ -63,7 +73,7 @@ export default function Cadastro() {
       } else if (err.code === 'auth/network-request-failed') {
         setErro('Sem conexão com a internet. Verifique sua rede e tente novamente.');
       } else if (err.code === 'permission-denied') {
-        setErro('Não foi possível concluir o cadastro agora. Tente novamente em instantes ou procure a administração.');
+        setErro('Não foi possível concluir o cadastro agora. Avise a administração (regras de acesso do sistema).');
       } else {
         setErro('Não foi possível criar a conta. Confira os dados e tente novamente.');
       }
@@ -94,7 +104,7 @@ export default function Cadastro() {
             <div className="pt-6 space-y-2">
               <h2 className="text-xl font-bold leading-tight">Crie sua Conta Acadêmica</h2>
               <p className="text-sm text-indigo-100 leading-relaxed">
-                Cadastre-se com suas informações institucionais para solicitar a retirada de pertences perdidos no campus e acompanhar seus pedidos.
+                Sua matrícula ou registro funcional identifica você no balcão de atendimento e não pode ser usada por mais de uma conta.
               </p>
             </div>
           </div>
@@ -109,13 +119,13 @@ export default function Cadastro() {
 
         {/* Coluna Direita: Formulário de Cadastro */}
         <div className="p-6 md:p-10 flex flex-col justify-center space-y-5">
-          <Link to="/" className="inline-flex items-center gap-1.5 text-sm font-semibold text-gray-700 hover:text-indigo-900 min-h-11 -mt-2 w-fit">
-            <ArrowLeft size={16} aria-hidden="true" /> Voltar ao catálogo
+          <Link to="/login" state={location.state} className="inline-flex items-center gap-1.5 text-sm font-semibold text-gray-700 hover:text-indigo-900 min-h-11 -mt-2 w-fit">
+            <ArrowLeft size={16} aria-hidden="true" /> Voltar ao login
           </Link>
 
           <div>
             <h1 className="text-xl font-bold text-gray-900">Criar Nova Conta</h1>
-            <p className="text-sm text-gray-600 mt-1">Preencha seus dados acadêmicos para se registrar no sistema.</p>
+            <p className="text-sm text-gray-600 mt-1">Preencha seus dados para se registrar no sistema.</p>
           </div>
 
           {erro && (
@@ -130,21 +140,14 @@ export default function Cadastro() {
               <label htmlFor="cad-nome" className="block text-gray-800 font-semibold">Nome completo</label>
               <div className="relative">
                 <User size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500" aria-hidden="true" />
-                <input
-                  id="cad-nome"
-                  type="text"
-                  required
-                  autoComplete="name"
-                  placeholder="Digite seu nome completo"
-                  value={nome}
-                  onChange={(e) => setNome(e.target.value)}
-                  className={classeCampo}
-                />
+                <input id="cad-nome" type="text" required autoComplete="name" placeholder="Digite seu nome completo" value={nome} onChange={(e) => setNome(e.target.value)} className={classeCampo} />
               </div>
             </div>
 
             <div className="space-y-1">
-              <label htmlFor="cad-email" className="block text-gray-800 font-semibold">E-mail institucional</label>
+              <label htmlFor="cad-email" className="block text-gray-800 font-semibold">
+                {MODO_RESTRITO_UEMG ? 'E-mail institucional' : 'E-mail'}
+              </label>
               <div className="relative">
                 <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500" aria-hidden="true" />
                 <input
@@ -153,18 +156,12 @@ export default function Cadastro() {
                   required
                   autoComplete="email"
                   inputMode="email"
-                  placeholder="seu.nome@discente.uemg.br"
+                  placeholder={MODO_RESTRITO_UEMG ? 'seu.nome@discente.uemg.br' : 'seu.email@exemplo.com'}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  aria-describedby={emailForaDoPadrao ? 'cad-email-dica' : undefined}
                   className={classeCampo}
                 />
               </div>
-              {emailForaDoPadrao && (
-                <p id="cad-email-dica" className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">
-                  Este e-mail não parece ser da UEMG (termina em @discente.uemg.br ou @uemg.br). Você ainda pode continuar, mas a administração pode não reconhecer sua conta.
-                </p>
-              )}
             </div>
 
             <div className="space-y-1">
@@ -179,23 +176,30 @@ export default function Cadastro() {
                   autoComplete="off"
                   placeholder="Digite apenas números"
                   value={numeroCadastro}
-                  onChange={(e) => setNumeroCadastro(e.target.value.replace(/\D/g, ''))}
-                  className={classeCampo}
+                  onChange={(e) => {
+                    setNumeroCadastro(e.target.value.replace(/\D/g, ''));
+                    setErroMatricula('');
+                  }}
+                  aria-invalid={Boolean(erroMatricula)}
+                  aria-describedby="cad-matricula-dica"
+                  className={`${classeCampo} ${erroMatricula ? 'border-rose-400 bg-rose-50/40' : ''}`}
                 />
               </div>
+              <p
+                id="cad-matricula-dica"
+                role={erroMatricula ? 'alert' : undefined}
+                className={`text-xs ${erroMatricula || matriculaCurta ? 'text-rose-700 font-medium' : 'text-gray-600'}`}
+              >
+                {erroMatricula ||
+                  (matriculaCurta
+                    ? `Faltam ${MIN_DIGITOS_MATRICULA - numeroCadastro.length} número(s) para o mínimo de ${MIN_DIGITOS_MATRICULA}.`
+                    : 'Cada número pode ser usado por uma única conta.')}
+              </p>
             </div>
 
             <div className="space-y-1">
               <label htmlFor="cad-senha" className="block text-gray-800 font-semibold">Senha de acesso</label>
-              <CampoSenha
-                id="cad-senha"
-                value={senha}
-                onChange={(e) => setSenha(e.target.value)}
-                placeholder="Mínimo de 6 caracteres"
-                autoComplete="new-password"
-                minLength={6}
-                describedBy="cad-senha-dica"
-              />
+              <CampoSenha id="cad-senha" value={senha} onChange={(e) => setSenha(e.target.value)} placeholder="Mínimo de 6 caracteres" autoComplete="new-password" minLength={6} describedBy="cad-senha-dica" />
               <p id="cad-senha-dica" className={`text-xs ${senhaCurta ? 'text-rose-700 font-medium' : 'text-gray-600'}`}>
                 {senhaCurta ? `Faltam ${6 - senha.length} caractere(s) para o mínimo de 6.` : 'Use pelo menos 6 caracteres.'}
               </p>
@@ -203,17 +207,8 @@ export default function Cadastro() {
 
             <div className="space-y-1">
               <label htmlFor="cad-confirmar" className="block text-gray-800 font-semibold">Confirmar senha</label>
-              <CampoSenha
-                id="cad-confirmar"
-                value={confirmarSenha}
-                onChange={(e) => setConfirmarSenha(e.target.value)}
-                placeholder="Digite a senha novamente"
-                autoComplete="new-password"
-                describedBy={senhasDiferentes ? 'cad-confirmar-dica' : undefined}
-              />
-              {senhasDiferentes && (
-                <p id="cad-confirmar-dica" className="text-xs text-rose-700 font-medium">As senhas ainda não são iguais.</p>
-              )}
+              <CampoSenha id="cad-confirmar" value={confirmarSenha} onChange={(e) => setConfirmarSenha(e.target.value)} placeholder="Digite a senha novamente" autoComplete="new-password" describedBy={senhasDiferentes ? 'cad-confirmar-dica' : undefined} />
+              {senhasDiferentes && <p id="cad-confirmar-dica" className="text-xs text-rose-700 font-medium">As senhas ainda não são iguais.</p>}
             </div>
 
             <button
@@ -234,13 +229,6 @@ export default function Cadastro() {
               )}
             </button>
           </form>
-
-          <div className="pt-2 border-t border-gray-100 text-center text-sm text-gray-600">
-            Já tem uma conta?{' '}
-            <Link to="/login" state={location.state} className="text-indigo-900 font-bold hover:underline inline-block py-2">
-              Faça login
-            </Link>
-          </div>
         </div>
       </div>
     </div>
