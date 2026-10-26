@@ -1,34 +1,59 @@
+
 import { auth, db } from '../config/firebase';
+
 import {
-  OAuthProvider,
-  signInWithPopup,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   sendPasswordResetEmail,
   deleteUser,
   signOut,
 } from 'firebase/auth';
-import { doc, getDoc, runTransaction } from 'firebase/firestore';
 
-// E-mails aceitos quando a restrição está ligada: @uemg.br, @discente.uemg.br e outros subdomínios da UEMG
-export const DOMINIO_INSTITUCIONAL = /@([a-z0-9-]+\.)*uemg\.br$/i;
+import {
+  doc,
+  getDoc,
+  runTransaction,
+  serverTimestamp,
+} from 'firebase/firestore';
 
-// MODO DE SIMULAÇÃO (padrão): qualquer conta Microsoft pode entrar, para demonstrar o fluxo sem contas da UEMG.
-// Para exigir conta da UEMG (versão final), coloque VITE_RESTRINGIR_DOMINIO_UEMG=true no .env e reinicie o servidor.
-export const MODO_RESTRITO_UEMG = import.meta.env.VITE_RESTRINGIR_DOMINIO_UEMG === 'true';
+// =====================================================
+// 1. CONFIGURAÇÕES
+// =====================================================
 
-// Método de login: 'senha' (e-mail e senha, padrão por enquanto) ou 'microsoft'.
-// A regra de matrícula única é a mesma nos dois. Troque em VITE_METODO_LOGIN no .env e reinicie o servidor.
-export const METODO_LOGIN = import.meta.env.VITE_METODO_LOGIN === 'microsoft' ? 'microsoft' : 'senha';
+// Não exigimos validação institucional da UEMG.
+// A restrição de domínio fica desativada por padrão.
 
-// Mínimo de números aceito em matrícula/registro funcional
+export const DOMINIO_INSTITUCIONAL =
+  /@([a-z0-9-]+\.)*uemg\.br$/i;
+
+export const MODO_RESTRITO_UEMG =
+  import.meta.env.VITE_RESTRINGIR_DOMINIO_UEMG === 'true';
+
+// Limites da matrícula
 export const MIN_DIGITOS_MATRICULA = 4;
+export const MAX_DIGITOS_MATRICULA = 20;
 
-export const dominioPermitido = (email) => !MODO_RESTRITO_UEMG || DOMINIO_INSTITUCIONAL.test(email || '');
+// Apenas verifica o domínio se o modo restrito
+// tiver sido explicitamente ativado no .env.
+
+export const dominioPermitido = (email) => {
+  if (!MODO_RESTRITO_UEMG) {
+    return true;
+  }
+
+  return DOMINIO_INSTITUCIONAL.test(
+    String(email || '').trim()
+  );
+};
+
+// =====================================================
+// 2. ERROS PERSONALIZADOS
+// =====================================================
 
 export class DominioNaoPermitidoError extends Error {
   constructor(email) {
     super('DOMINIO_NAO_PERMITIDO');
+
     this.name = 'DominioNaoPermitidoError';
     this.email = email;
   }
@@ -37,172 +62,465 @@ export class DominioNaoPermitidoError extends Error {
 export class MatriculaEmUsoError extends Error {
   constructor() {
     super('MATRICULA_EM_USO');
+
     this.name = 'MatriculaEmUsoError';
   }
 }
 
-// "tenant" define quais contas Microsoft podem entrar. Simulação: 'common' (pessoais e de trabalho/escola).
-// Restrito à UEMG: 'organizations' ou o ID do tenant da UEMG. Pode ser trocado em VITE_MICROSOFT_TENANT no .env.
-const criarProvedorMicrosoft = () => {
-  const provider = new OAuthProvider('microsoft.com');
-  provider.setCustomParameters({
-    prompt: 'select_account',
-    tenant: import.meta.env.VITE_MICROSOFT_TENANT || (MODO_RESTRITO_UEMG ? 'organizations' : 'common'),
-  });
-  return provider;
-};
+// =====================================================
+// 3. VALIDAÇÃO E NORMALIZAÇÃO
+// =====================================================
 
-// Login ÚNICO do sistema: conta Microsoft.
-// Com a restrição ligada, confere o domínio do e-mail. Se não for da UEMG, encerra a sessão na hora.
-// (A mesma regra deve existir nas Regras do Firestore, pois a checagem no navegador pode ser contornada.)
-export const loginComMicrosoft = async () => {
-  const resultado = await signInWithPopup(auth, criarProvedorMicrosoft());
-  const user = resultado.user;
-  const email =
-    user.email || user.providerData?.find((p) => p.providerId === 'microsoft.com')?.email || '';
+// Transforma a matrícula em uma chave padronizada.
+//
+// Exemplos:
+// 00012345 -> 12345
+// 1234567  -> 1234567
+//
+// Isso evita tratar números equivalentes como
+// matrículas diferentes.
 
-  if (!dominioPermitido(email)) {
-    await signOut(auth);
-    throw new DominioNaoPermitidoError(email);
+export const chaveMatricula = (numero) => {
+  const digitos = String(numero ?? '')
+    .replace(/\D/g, '');
+
+  if (!digitos) {
+    return '';
   }
-  return user;
+
+  return digitos.replace(/^0+/, '') || '0';
 };
 
-// Login por e-mail e senha (método usado enquanto a Microsoft não está configurada)
+// Verifica o formato aceito pelo sistema.
+
+function validarMatricula(numero) {
+  const chave = chaveMatricula(numero);
+
+  const formatoValido =
+    /^[1-9][0-9]{3,19}$/.test(chave);
+
+  if (!formatoValido) {
+    throw new Error('MATRICULA_INVALIDA');
+  }
+
+  return chave;
+}
+
+// Valida o nome do usuário.
+
+function validarNome(nome) {
+  const nomeNormalizado = String(nome ?? '').trim();
+
+  if (
+    nomeNormalizado.length === 0 ||
+    nomeNormalizado.length > 160
+  ) {
+    throw new Error('NOME_INVALIDO');
+  }
+
+  return nomeNormalizado;
+}
+
+// Normaliza e-mail.
+
+function normalizarEmail(email) {
+  const valor = String(email ?? '')
+    .trim()
+    .toLowerCase();
+
+  if (!valor || !valor.includes('@')) {
+    throw new Error('EMAIL_INVALIDO');
+  }
+
+  return valor;
+}
+
+// =====================================================
+// 4. LOGIN
+// =====================================================
+
 export const entrarComSenha = async (email, senha) => {
-  const credencial = await signInWithEmailAndPassword(auth, email, senha);
+  const emailNormalizado = normalizarEmail(email);
+
+  const credencial = await signInWithEmailAndPassword(
+    auth,
+    emailNormalizado,
+    senha
+  );
+
   return credencial.user;
 };
+
+// =====================================================
+// 5. REDEFINIÇÃO DE SENHA
+// =====================================================
 
 export const enviarRedefinicaoSenha = async (email) => {
-  await sendPasswordResetEmail(auth, email);
+  const emailNormalizado = normalizarEmail(email);
+
+  await sendPasswordResetEmail(
+    auth,
+    emailNormalizado
+  );
 };
 
-// Cria a conta e já reserva a matrícula. Se o número já estiver em uso, a conta recém-criada é
-// apagada na hora, para não sobrar um login sem perfil (e o erro é mostrado ao usuário).
-export const cadastrarComSenha = async ({ email, senha, nome, numeroCadastro }) => {
-  if (!dominioPermitido(email)) throw new DominioNaoPermitidoError(email);
+// =====================================================
+// 6. LOGOUT
+// =====================================================
 
-  const credencial = await createUserWithEmailAndPassword(auth, email, senha);
-  try {
-    await completarCadastro({ uid: credencial.user.uid, email, nome, numeroCadastro });
-  } catch (err) {
-    try {
-      await deleteUser(credencial.user);
-    } catch (erroAoApagar) {
-      console.error('Não foi possível desfazer a conta criada:', erroAoApagar);
-      await signOut(auth);
-    }
-    throw err;
-  }
-  return credencial.user;
-};
-
-// Logout
 export const realizarLogout = async () => {
   await signOut(auth);
 };
 
-// Buscar Perfil do Usuário
+// =====================================================
+// 7. CONSULTAR PERFIL
+// =====================================================
+
 export const buscarPerfilUsuario = async (uid) => {
-  const docRef = doc(db, 'usuarios', uid);
-  const docSnap = await getDoc(docRef);
-  return docSnap.exists() ? { id: docSnap.id, ...docSnap.data() } : null;
-};
-
-// ---------------------------------------------------------------------------
-// Matrícula / registro funcional ÚNICO
-// ---------------------------------------------------------------------------
-// O Firestore não tem "campo único". Por isso, cada número vira o ID de um documento na coleção
-// "matriculas" (matriculas/{numero} -> { uid }). Dois cadastros com o mesmo número disputam o mesmo
-// documento, e a transação garante que só um deles vence.
-
-// Chave canônica: só dígitos e sem zeros à esquerda ("0012345" e "12345" contam como o mesmo número).
-export const chaveMatricula = (numero) => {
-  const digitos = String(numero ?? '').replace(/\D/g, '');
-  if (!digitos) return '';
-  return digitos.replace(/^0+/, '') || '0';
-};
-
-// Conclui o cadastro depois do primeiro login Microsoft: grava o perfil e reserva a matrícula.
-export const completarCadastro = async ({ uid, email, nome, numeroCadastro }) => {
-  const digitos = String(numeroCadastro ?? '').replace(/\D/g, '');
-  const chave = chaveMatricula(digitos);
-  if (!chave) throw new Error('MATRICULA_INVALIDA');
-
-  const matriculaRef = doc(db, 'matriculas', chave);
-  const usuarioRef = doc(db, 'usuarios', uid);
-
-  await runTransaction(db, async (transacao) => {
-    const matriculaSnap = await transacao.get(matriculaRef);
-    const usuarioSnap = await transacao.get(usuarioRef);
-
-    if (matriculaSnap.exists() && matriculaSnap.data().uid !== uid) {
-      throw new MatriculaEmUsoError();
-    }
-
-    if (!matriculaSnap.exists()) {
-      transacao.set(matriculaRef, { uid, criadoEm: new Date() });
-    }
-
-    if (usuarioSnap.exists()) {
-      // Não mexe em tipo/eAdmin: um administrador não pode perder o acesso ao concluir o cadastro
-      transacao.update(usuarioRef, { nome, email, numeroCadastro: digitos });
-    } else {
-      transacao.set(usuarioRef, {
-        nome,
-        email,
-        numeroCadastro: digitos,
-        tipo: 'usuario',
-        eAdmin: false,
-        dataCriacao: new Date(),
-      });
-    }
-  });
-};
-
-// Exclui o perfil e libera a matrícula para uso futuro (só libera se ela pertencia mesmo a esse usuário).
-export const excluirPerfilUsuario = async ({ id, numeroCadastro }) => {
-  const chave = chaveMatricula(numeroCadastro);
-  const usuarioRef = doc(db, 'usuarios', id);
-  const matriculaRef = chave ? doc(db, 'matriculas', chave) : null;
-
-  await runTransaction(db, async (transacao) => {
-    const matriculaSnap = matriculaRef ? await transacao.get(matriculaRef) : null;
-    transacao.delete(usuarioRef);
-    if (matriculaSnap?.exists() && matriculaSnap.data().uid === id) {
-      transacao.delete(matriculaRef);
-    }
-  });
-};
-
-// Registra na coleção "matriculas" as matrículas de contas criadas ANTES da regra de unicidade
-// e aponta números repetidos. Uso da administração, uma vez (pode repetir sem problema).
-export const sincronizarMatriculas = async (usuarios) => {
-  const resultado = { registradas: 0, jaRegistradas: 0, semNumero: [], conflitos: [] };
-
-  for (const u of usuarios) {
-    const chave = chaveMatricula(u.numeroCadastro || u.matricula);
-    if (!chave) {
-      resultado.semNumero.push(u.id);
-      continue;
-    }
-
-    const ref = doc(db, 'matriculas', chave);
-    const situacao = await runTransaction(db, async (transacao) => {
-      const snap = await transacao.get(ref);
-      if (!snap.exists()) {
-        transacao.set(ref, { uid: u.id, criadoEm: new Date() });
-        return { tipo: 'nova' };
-      }
-      if (snap.data().uid === u.id) return { tipo: 'ja' };
-      return { tipo: 'conflito', donoId: snap.data().uid };
-    });
-
-    if (situacao.tipo === 'nova') resultado.registradas += 1;
-    else if (situacao.tipo === 'ja') resultado.jaRegistradas += 1;
-    else resultado.conflitos.push({ chave, usuarioId: u.id, donoId: situacao.donoId });
+  if (!uid) {
+    throw new Error('UID_INVALIDO');
   }
 
-  return resultado;
+  const usuarioRef = doc(
+    db,
+    'usuarios',
+    uid
+  );
+
+  const snapshot = await getDoc(usuarioRef);
+
+  if (!snapshot.exists()) {
+    return null;
+  }
+
+  return {
+    id: snapshot.id,
+    ...snapshot.data(),
+  };
+};
+
+// =====================================================
+// 8. COMPLETAR CADASTRO
+// =====================================================
+//
+// Responsável por criar:
+// - usuarios/{uid}
+// - matriculas/{numero}
+//
+// Os dois documentos são gravados na mesma
+// transação do Firestore.
+//
+// Se qualquer operação for recusada, a transação
+// não grava nenhum dos documentos.
+//
+// A matrícula de outra pessoa não é consultada.
+//
+// O Firestore deve permitir CREATE, mas negar
+// UPDATE em matriculas/{numero}.
+// Assim, uma matrícula já existente não pode
+// ser sobrescrita.
+//
+// IMPORTANTE:
+// O bloqueio real depende do firestore.rules.
+// =====================================================
+
+export const completarCadastro = async ({
+  uid,
+  email,
+  nome,
+  numeroCadastro,
+}) => {
+  const usuarioAutenticado = auth.currentUser;
+
+  // -----------------------------------------------
+  // Verificar autenticação
+  // -----------------------------------------------
+
+  if (
+    !usuarioAutenticado ||
+    usuarioAutenticado.uid !== uid
+  ) {
+    throw new Error('USUARIO_NAO_AUTENTICADO');
+  }
+
+  const emailAutenticado = normalizarEmail(
+    usuarioAutenticado.email
+  );
+
+  const emailInformado = normalizarEmail(email);
+
+  if (emailAutenticado !== emailInformado) {
+    throw new Error('EMAIL_INVALIDO');
+  }
+
+  // -----------------------------------------------
+  // Verificar domínio somente se configurado
+  // -----------------------------------------------
+
+  if (!dominioPermitido(emailAutenticado)) {
+    throw new DominioNaoPermitidoError(
+      emailAutenticado
+    );
+  }
+
+  // -----------------------------------------------
+  // Validar dados
+  // -----------------------------------------------
+
+  const nomeValidado = validarNome(nome);
+
+  const matriculaValidada = validarMatricula(
+    numeroCadastro
+  );
+
+  // -----------------------------------------------
+  // Referências do Firestore
+  // -----------------------------------------------
+
+  const usuarioRef = doc(
+    db,
+    'usuarios',
+    uid
+  );
+
+  const matriculaRef = doc(
+    db,
+    'matriculas',
+    matriculaValidada
+  );
+
+  // -----------------------------------------------
+  // Transação atômica
+  // -----------------------------------------------
+
+  await runTransaction(db, async (transacao) => {
+    // Somente o próprio perfil é consultado.
+    // Não precisamos consultar matrículas alheias.
+
+    const usuarioSnap = await transacao.get(
+      usuarioRef
+    );
+
+    // ---------------------------------------------
+    // Caso 1: perfil já existe
+    // ---------------------------------------------
+
+    if (usuarioSnap.exists()) {
+      const dadosAtuais = usuarioSnap.data();
+
+      const matriculaAtual =
+        dadosAtuais.numeroCadastro || '';
+
+      // Não permitir alterar matrícula existente.
+      if (matriculaAtual) {
+        if (
+          chaveMatricula(matriculaAtual) !==
+          matriculaValidada
+        ) {
+          throw new Error(
+            'MATRICULA_NAO_EDITAVEL'
+          );
+        }
+
+        // Não reescreve a matrícula nem o perfil.
+        // A integridade das reservas antigas
+        // será verificada separadamente.
+        return;
+      }
+
+      // -------------------------------------------
+      // Perfil antigo sem matrícula
+      // -------------------------------------------
+
+      // O documento será criado somente se
+      // a matrícula ainda não estiver reservada.
+      //
+      // Caso já exista, a regra do Firestore
+      // negará a atualização.
+
+      transacao.set(matriculaRef, {
+        uid,
+        criadoEm: serverTimestamp(),
+      });
+
+      transacao.update(usuarioRef, {
+        nome: nomeValidado,
+        numeroCadastro: matriculaValidada,
+      });
+
+      return;
+    }
+
+    // ---------------------------------------------
+    // Caso 2: perfil novo
+    // ---------------------------------------------
+
+    // Reservar matrícula.
+
+    transacao.set(matriculaRef, {
+      uid,
+      criadoEm: serverTimestamp(),
+    });
+
+    // Criar perfil do estudante.
+    //
+    // O papel administrativo não pode ser
+    // concedido durante o cadastro.
+
+    transacao.set(usuarioRef, {
+      nome: nomeValidado,
+      email: emailAutenticado,
+      numeroCadastro: matriculaValidada,
+
+      tipo: 'usuario',
+      eAdmin: false,
+
+      dataCriacao: serverTimestamp(),
+    });
+  });
+
+  return true;
+};
+
+// =====================================================
+// 9. CADASTRAR COM E-MAIL E SENHA
+// =====================================================
+//
+// Primeiro cria a conta no Firebase Authentication.
+//
+// Depois cria o perfil e reserva a matrícula.
+//
+// Se a transação falhar, tenta desfazer a conta
+// recém-criada no Authentication.
+//
+// Não são necessárias Cloud Functions.
+// =====================================================
+
+export const cadastrarComSenha = async ({
+  email,
+  senha,
+  nome,
+  numeroCadastro,
+}) => {
+  // -----------------------------------------------
+  // Validar antes de criar a conta
+  // -----------------------------------------------
+
+  const emailNormalizado = normalizarEmail(email);
+
+  const nomeValidado = validarNome(nome);
+
+  const matriculaValidada = validarMatricula(
+    numeroCadastro
+  );
+
+  if (!dominioPermitido(emailNormalizado)) {
+    throw new DominioNaoPermitidoError(
+      emailNormalizado
+    );
+  }
+
+  if (
+    typeof senha !== 'string' ||
+    senha.length < 6
+  ) {
+    throw new Error('SENHA_INVALIDA');
+  }
+
+  // -----------------------------------------------
+  // Criar conta no Authentication
+  // -----------------------------------------------
+
+  const credencial = await createUserWithEmailAndPassword(
+    auth,
+    emailNormalizado,
+    senha
+  );
+
+  const usuarioCriado = credencial.user;
+
+  // -----------------------------------------------
+  // Criar perfil e matrícula
+  // -----------------------------------------------
+
+  try {
+    await completarCadastro({
+      uid: usuarioCriado.uid,
+      email: usuarioCriado.email,
+      nome: nomeValidado,
+      numeroCadastro: matriculaValidada,
+    });
+
+    return usuarioCriado;
+
+  } catch (erroCadastro) {
+    console.error(
+      'Falha ao criar perfil e reservar matrícula:',
+      erroCadastro
+    );
+
+    // ---------------------------------------------
+    // Desfazer conta incompleta
+    // ---------------------------------------------
+
+    try {
+      await deleteUser(usuarioCriado);
+
+    } catch (erroExclusao) {
+      console.error(
+        'Não foi possível desfazer a conta incompleta:',
+        erroExclusao
+      );
+
+      // Evita manter a sessão de uma conta
+      // que não possui perfil completo.
+      try {
+        await signOut(auth);
+      } catch (erroLogout) {
+        console.error(
+          'Falha ao encerrar sessão incompleta:',
+          erroLogout
+        );
+      }
+    }
+
+    // Não tratamos todo permission-denied como
+    // matrícula duplicada, pois pode representar
+    // uma falha diferente nas regras.
+
+    throw erroCadastro;
+  }
+};
+
+// =====================================================
+// 10. EXCLUSÃO DE USUÁRIOS
+// =====================================================
+//
+// Excluir apenas um documento do Firestore
+// não remove a conta do Firebase Authentication.
+//
+// Por segurança, a operação fica bloqueada.
+// =====================================================
+
+export const excluirPerfilUsuario = async () => {
+  throw new Error(
+    'Exclusão de contas temporariamente desativada por segurança.'
+  );
+};
+
+// =====================================================
+// 11. SINCRONIZAÇÃO DE MATRÍCULAS
+// =====================================================
+//
+// Não executamos migração automática de contas
+// antigas pelo navegador.
+//
+// Esse processo precisa identificar conflitos
+// antes de modificar o banco de dados.
+// =====================================================
+
+export const sincronizarMatriculas = async () => {
+  throw new Error(
+    'Sincronização automática de matrículas desativada. É necessária uma migração controlada.'
+  );
 };
