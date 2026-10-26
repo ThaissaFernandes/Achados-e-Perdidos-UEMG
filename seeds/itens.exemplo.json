@@ -1,0 +1,6 @@
+[
+  {"titulo":"Chave com chaveiro azul","descricao":"Molho com duas chaves e chaveiro azul; descrição demonstrativa.","localEncontrado":"Biblioteca","categoriaId":"Chaves","status":"disponível","fotoUrl":""},
+  {"titulo":"Garrafa térmica preta","descricao":"Garrafa de metal, sem identificação; descrição demonstrativa.","localEncontrado":"Bloco de salas de aula","categoriaId":"Objetos pessoais","status":"disponível","fotoUrl":""},
+  {"titulo":"Estojo de tecido","descricao":"Estojo cinza encontrado após uma aula; descrição demonstrativa.","localEncontrado":"Laboratório","categoriaId":"Material escolar","status":"em análise","fotoUrl":""},
+  {"titulo":"Guarda-chuva azul","descricao":"Guarda-chuva dobrável, sem identificação; descrição demonstrativa.","localEncontrado":"Recepção","categoriaId":"Acessórios","status":"devolvido","fotoUrl":""}
+]

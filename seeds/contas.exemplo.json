@@ -1,0 +1,4 @@
+[
+  {"email":"admin.demo@example.invalid","nome":"Administração (demonstração)","numeroCadastro":"00000001","tipo":"admin","eAdmin":true,"observacao":"Modelo apenas. Criar a conta no Firebase Auth e atribuir papel somente em ambiente confiável, após regras publicadas."},
+  {"email":"usuario.demo@example.invalid","nome":"Usuário (demonstração)","numeroCadastro":"00000002","tipo":"usuario","eAdmin":false,"observacao":"Modelo apenas. Criar com senha forte via Firebase Auth, sem guardar senha em JSON."}
+]
