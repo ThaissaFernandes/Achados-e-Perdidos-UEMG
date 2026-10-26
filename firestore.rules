@@ -1,0 +1,741 @@
+
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ==========================================
+    // 1. AUTENTICAÇÃO E AUTORIZAÇÃO
+    // ==========================================
+
+    function logado() {
+      return request.auth != null;
+    }
+
+    function dono(uid) {
+      return logado()
+        && request.auth.uid == uid;
+    }
+
+    function admin() {
+      return logado()
+        && exists(
+          /databases/$(database)/documents/administradores/$(request.auth.uid)
+        )
+        && get(
+          /databases/$(database)/documents/administradores/$(request.auth.uid)
+        ).data.ativo == true;
+    }
+
+    function caminhoItem(itemId) {
+      return /databases/$(database)/documents/itens/$(itemId);
+    }
+
+    function caminhoPedido(pedidoId) {
+      return /databases/$(database)/documents/solicitacoesDevolucao/$(pedidoId);
+    }
+
+    function caminhoUsuario(uid) {
+      return /databases/$(database)/documents/usuarios/$(uid);
+    }
+
+    function caminhoMatricula(numero) {
+      return /databases/$(database)/documents/matriculas/$(numero);
+    }
+
+    // ==========================================
+    // 2. ADMINISTRADORES
+    // ==========================================
+
+    match /administradores/{uid} {
+
+      // Consulta somente da própria autorização.
+      allow get: if dono(uid);
+
+      allow list: if false;
+
+      // Atribuição administrativa apenas
+      // por ambiente confiável.
+      allow create, update, delete: if false;
+    }
+
+    // ==========================================
+    // 3. USUÁRIOS
+    // ==========================================
+
+    match /usuarios/{uid} {
+
+      // Estudantes consultam o próprio perfil.
+      // Administradores podem consultar perfis.
+      allow get: if dono(uid) || admin();
+
+      allow list: if admin();
+
+      // Matrícula padronizada:
+      // 4 a 20 dígitos, sem zero inicial.
+      function matriculaValida(numero) {
+        return numero is string
+          && numero.matches('^[1-9][0-9]{3,19}$');
+      }
+
+      // Confere a correspondência entre
+      // matrícula reservada e perfil.
+      function reservaCorreta(numero) {
+        return matriculaValida(numero)
+          && getAfter(
+            caminhoMatricula(numero)
+          ).data.uid == uid;
+      }
+
+      // --------------------------------------
+      // CRIAR PERFIL
+      // --------------------------------------
+
+      allow create: if dono(uid)
+
+        && request.resource.data.keys().hasOnly([
+          'nome',
+          'email',
+          'numeroCadastro',
+          'tipo',
+          'eAdmin',
+          'dataCriacao'
+        ])
+
+        && request.resource.data.keys().hasAll([
+          'nome',
+          'email',
+          'numeroCadastro',
+          'tipo',
+          'eAdmin'
+        ])
+
+        && request.resource.data.nome is string
+
+        && request.resource.data.nome.size() > 0
+
+        && request.resource.data.nome.size() <= 160
+
+        && request.resource.data.email ==
+          request.auth.token.email
+
+        && request.resource.data.tipo == 'usuario'
+
+        && request.resource.data.eAdmin == false
+
+        && reservaCorreta(
+          request.resource.data.numeroCadastro
+        );
+
+      // --------------------------------------
+      // EDITAR DADOS PESSOAIS
+      // --------------------------------------
+
+      function editarDadosPessoais() {
+        return dono(uid)
+
+          // Somente nome e e-mail podem mudar.
+          && request.resource.data.diff(resource.data)
+            .affectedKeys().hasOnly([
+              'nome',
+              'email'
+            ])
+
+          && request.resource.data.nome is string
+
+          && request.resource.data.nome.size() > 0
+
+          && request.resource.data.nome.size() <= 160
+
+          && request.resource.data.email ==
+            request.auth.token.email;
+      }
+
+      // --------------------------------------
+      // COMPLETAR PERFIL ANTIGO
+      // --------------------------------------
+
+      function completarPerfilAntigo() {
+        return dono(uid)
+
+          // Somente perfis ainda sem matrícula.
+          && resource.data.get(
+            'numeroCadastro',
+            ''
+          ) == ''
+
+          && request.resource.data.diff(resource.data)
+            .affectedKeys().hasOnly([
+              'nome',
+              'numeroCadastro'
+            ])
+
+          && request.resource.data.nome is string
+
+          && request.resource.data.nome.size() > 0
+
+          && request.resource.data.nome.size() <= 160
+
+          && reservaCorreta(
+            request.resource.data.numeroCadastro
+          );
+      }
+
+      allow update: if editarDadosPessoais()
+        || completarPerfilAntigo();
+
+      // Não apagar o perfil diretamente.
+      allow delete: if false;
+    }
+
+    // ==========================================
+    // 4. MATRÍCULAS
+    // ==========================================
+
+    match /matriculas/{numero} {
+
+      // Somente o próprio estudante pode consultar
+      // o documento da sua matrícula.
+      //
+      // Um estudante não pode descobrir
+      // o UID associado à matrícula de outra conta.
+      allow get: if logado()
+        && resource != null
+        && resource.data.uid == request.auth.uid;
+
+      // Impede listar todas as matrículas.
+      allow list: if false;
+
+      // Formato padronizado da matrícula.
+      function numeroValido() {
+        return numero.matches('^[1-9][0-9]{3,19}$');
+      }
+
+      // Confere o perfil após a transação.
+      function perfilCorrespondente() {
+        return getAfter(
+          caminhoUsuario(request.auth.uid)
+        ).data.numeroCadastro == numero;
+      }
+
+      // --------------------------------------
+      // RESERVAR MATRÍCULA
+      // --------------------------------------
+
+      // A criação de matrícula exige:
+      // - usuário autenticado;
+      // - matrícula no formato correto;
+      // - UID do próprio estudante;
+      // - data criada pelo servidor;
+      // - perfil correspondente na transação.
+
+      allow create: if logado()
+
+        && numeroValido()
+
+        && request.resource.data.keys().hasOnly([
+          'uid',
+          'criadoEm'
+        ])
+
+        && request.resource.data.keys().hasAll([
+          'uid',
+          'criadoEm'
+        ])
+
+        && request.resource.data.uid ==
+          request.auth.uid
+
+        && request.resource.data.criadoEm ==
+          request.time
+
+        && perfilCorrespondente();
+
+      // Matrículas existentes não podem
+      // ser alteradas, transferidas ou apagadas.
+      allow update, delete: if false;
+    }
+
+    // ==========================================
+    // 5. ITENS
+    // ==========================================
+
+    match /itens/{itemId} {
+
+      // O catálogo é público.
+      allow read: if true;
+
+      // --------------------------------------
+      // CADASTRO ADMINISTRATIVO
+      // --------------------------------------
+
+      allow create: if admin()
+
+        && request.resource.data.keys().hasAll([
+          'titulo',
+          'status'
+        ])
+
+        && request.resource.data.titulo is string
+
+        && request.resource.data.titulo.size() > 0
+
+        && request.resource.data.status ==
+          'disponível'
+
+        && (
+          !('solicitacaoAtivaId' in request.resource.data)
+          || request.resource.data.solicitacaoAtivaId == null
+        );
+
+      // --------------------------------------
+      // RESERVAR ITEM
+      // disponível -> em análise
+      // --------------------------------------
+
+      function reservarItem() {
+        return logado()
+
+          && resource.data.status == 'disponível'
+
+          && (
+            !('solicitacaoAtivaId' in resource.data)
+            || resource.data.solicitacaoAtivaId == null
+          )
+
+          && request.resource.data.status ==
+            'em análise'
+
+          && request.resource.data.solicitacaoAtivaId
+            is string
+
+          && request.resource.data.diff(resource.data)
+            .affectedKeys().hasOnly([
+              'status',
+              'solicitacaoAtivaId'
+            ])
+
+          // O pedido deve ser criado na mesma
+          // transação e pertencer ao solicitante.
+          && getAfter(
+            caminhoPedido(
+              request.resource.data.solicitacaoAtivaId
+            )
+          ).data.itemId == itemId
+
+          && getAfter(
+            caminhoPedido(
+              request.resource.data.solicitacaoAtivaId
+            )
+          ).data.usuarioId == request.auth.uid
+
+          && getAfter(
+            caminhoPedido(
+              request.resource.data.solicitacaoAtivaId
+            )
+          ).data.status == 'Pendente'
+
+          && !exists(
+            caminhoPedido(
+              request.resource.data.solicitacaoAtivaId
+            )
+          );
+      }
+
+      // --------------------------------------
+      // EDIÇÃO ADMINISTRATIVA
+      // --------------------------------------
+
+      function editarDadosItem() {
+        return admin()
+
+          // Apenas campos cadastrais.
+          // Protege status e solicitação ativa.
+          && request.resource.data.diff(resource.data)
+            .affectedKeys().hasOnly([
+              'titulo',
+              'descricao',
+              'categoriaId',
+              'localEncontrado',
+              'fotoUrl'
+            ])
+
+          && request.resource.data.titulo is string
+
+          && request.resource.data.titulo.size() > 0
+
+          && request.resource.data.titulo.size() <= 160
+
+          && request.resource.data.descricao is string
+
+          && request.resource.data.descricao.size() <= 3000
+
+          && request.resource.data.categoriaId is string
+
+          && request.resource.data.localEncontrado is string
+
+          // Imagens em Base64 armazenadas
+          // diretamente no Firestore.
+          && request.resource.data.get(
+            'fotoUrl',
+            ''
+          ) is string
+
+          && request.resource.data.get(
+            'fotoUrl',
+            ''
+          ).size() <= 600000;
+      }
+
+      // --------------------------------------
+      // FINALIZAR RESERVA
+      // em análise -> disponível/devolvido
+      // --------------------------------------
+
+      function finalizarReserva() {
+        return logado()
+
+          && resource.data.status == 'em análise'
+
+          && resource.data.solicitacaoAtivaId is string
+
+          && request.resource.data.solicitacaoAtivaId ==
+            null
+
+          && request.resource.data.diff(resource.data)
+            .affectedKeys().hasOnly([
+              'status',
+              'solicitacaoAtivaId'
+            ])
+
+          && get(
+            caminhoPedido(
+              resource.data.solicitacaoAtivaId
+            )
+          ).data.status == 'Pendente'
+
+          && get(
+            caminhoPedido(
+              resource.data.solicitacaoAtivaId
+            )
+          ).data.itemId == itemId
+
+          && (
+
+            // --------------------------------
+            // CANCELAMENTO PELO ESTUDANTE
+            // --------------------------------
+
+            (
+              request.resource.data.status ==
+                'disponível'
+
+              && get(
+                caminhoPedido(
+                  resource.data.solicitacaoAtivaId
+                )
+              ).data.usuarioId == request.auth.uid
+
+              && getAfter(
+                caminhoPedido(
+                  resource.data.solicitacaoAtivaId
+                )
+              ).data.status == 'Cancelado'
+            )
+
+            ||
+
+            // --------------------------------
+            // ATENDIMENTO PELO ADMINISTRADOR
+            // --------------------------------
+
+            (
+              admin()
+
+              && (
+
+                // Confirmação de entrega
+                (
+                  request.resource.data.status ==
+                    'devolvido'
+
+                  && getAfter(
+                    caminhoPedido(
+                      resource.data.solicitacaoAtivaId
+                    )
+                  ).data.status == 'Concluído'
+                )
+
+                ||
+
+                // Recusa da solicitação
+                (
+                  request.resource.data.status ==
+                    'disponível'
+
+                  && getAfter(
+                    caminhoPedido(
+                      resource.data.solicitacaoAtivaId
+                    )
+                  ).data.status == 'Recusado'
+                )
+              )
+            )
+          );
+      }
+
+      // --------------------------------------
+      // PERMISSÕES DOS ITENS
+      // --------------------------------------
+
+      allow update: if reservarItem()
+        || finalizarReserva()
+        || editarDadosItem();
+
+      // Evita apagar registros históricos.
+      allow delete: if false;
+    }
+
+    // ==========================================
+    // 6. CATEGORIAS
+    // ==========================================
+
+    match /categorias/{id} {
+
+      allow read: if true;
+
+      allow write: if false;
+    }
+
+    // ==========================================
+    // 7. LOCAIS
+    // ==========================================
+
+    match /locais/{id} {
+
+      allow read: if true;
+
+      allow write: if false;
+    }
+
+    // ==========================================
+    // 8. SOLICITAÇÕES DE DEVOLUÇÃO
+    // ==========================================
+
+    match /solicitacoesDevolucao/{pedidoId} {
+
+      // Administradores consultam todas.
+      // Estudantes consultam apenas as próprias.
+      allow get, list: if admin()
+        || (
+          logado()
+          && resource.data.usuarioId == request.auth.uid
+        );
+
+      // --------------------------------------
+      // CRIAR SOLICITAÇÃO
+      // --------------------------------------
+
+      function criarPedido() {
+        return logado()
+
+          && !admin()
+
+          && request.resource.data.keys().hasOnly([
+            'itemId',
+            'itemTitulo',
+            'usuarioId',
+            'nomeUsuario',
+            'numeroCadastro',
+            'codigo',
+            'status',
+            'dataSolicitacao'
+          ])
+
+          && request.resource.data.keys().hasAll([
+            'itemId',
+            'itemTitulo',
+            'usuarioId',
+            'nomeUsuario',
+            'numeroCadastro',
+            'codigo',
+            'status',
+            'dataSolicitacao'
+          ])
+
+          && request.resource.data.usuarioId ==
+            request.auth.uid
+
+          && request.resource.data.status == 'Pendente'
+
+          && request.resource.data.itemId is string
+
+          && request.resource.data.codigo is string
+
+          && request.resource.data.codigo.size() >= 6
+
+          && request.resource.data.dataSolicitacao ==
+            request.time
+
+          // Dados do perfil do próprio solicitante.
+          && exists(
+            caminhoUsuario(request.auth.uid)
+          )
+
+          && request.resource.data.nomeUsuario ==
+            get(
+              caminhoUsuario(request.auth.uid)
+            ).data.nome
+
+          && request.resource.data.numeroCadastro ==
+            get(
+              caminhoUsuario(request.auth.uid)
+            ).data.numeroCadastro
+
+          // Item precisa existir e estar disponível.
+          && request.resource.data.itemTitulo ==
+            get(
+              caminhoItem(request.resource.data.itemId)
+            ).data.titulo
+
+          && get(
+            caminhoItem(request.resource.data.itemId)
+          ).data.status == 'disponível'
+
+          // O item deve ser reservado na
+          // mesma transação do pedido.
+          && getAfter(
+            caminhoItem(request.resource.data.itemId)
+          ).data.status == 'em análise'
+
+          && getAfter(
+            caminhoItem(request.resource.data.itemId)
+          ).data.solicitacaoAtivaId == pedidoId;
+      }
+
+      allow create: if criarPedido();
+
+      // --------------------------------------
+      // CANCELAR SOLICITAÇÃO
+      // --------------------------------------
+
+      function cancelarPedido() {
+        return logado()
+
+          && resource.data.usuarioId == request.auth.uid
+
+          && resource.data.status == 'Pendente'
+
+          && request.resource.data.status == 'Cancelado'
+
+          && request.resource.data.dataCancelamento ==
+            request.time
+
+          && request.resource.data.diff(resource.data)
+            .affectedKeys().hasOnly([
+              'status',
+              'dataCancelamento'
+            ])
+
+          // Confere a reserva original.
+          && get(
+            caminhoItem(resource.data.itemId)
+          ).data.status == 'em análise'
+
+          && get(
+            caminhoItem(resource.data.itemId)
+          ).data.solicitacaoAtivaId == pedidoId
+
+          // Confere a liberação do item
+          // na mesma transação.
+          && getAfter(
+            caminhoItem(resource.data.itemId)
+          ).data.status == 'disponível'
+
+          && getAfter(
+            caminhoItem(resource.data.itemId)
+          ).data.solicitacaoAtivaId == null;
+      }
+
+      // --------------------------------------
+      // ATENDER SOLICITAÇÃO
+      // --------------------------------------
+
+      function atenderPedido() {
+        return admin()
+
+          && resource.data.status == 'Pendente'
+
+          && request.resource.data.status in [
+            'Concluído',
+            'Recusado'
+          ]
+
+          && request.resource.data.atendidoPor ==
+            request.auth.uid
+
+          && request.resource.data.dataAtendimento ==
+            request.time
+
+          && request.resource.data.diff(resource.data)
+            .affectedKeys().hasOnly([
+              'status',
+              'atendidoPor',
+              'dataAtendimento'
+            ])
+
+          // Item vinculado ao pedido.
+          && get(
+            caminhoItem(resource.data.itemId)
+          ).data.status == 'em análise'
+
+          && get(
+            caminhoItem(resource.data.itemId)
+          ).data.solicitacaoAtivaId == pedidoId
+
+          // Reserva encerrada.
+          && getAfter(
+            caminhoItem(resource.data.itemId)
+          ).data.solicitacaoAtivaId == null
+
+          && (
+
+            // Confirmação de entrega
+            (
+              request.resource.data.status == 'Concluído'
+
+              && getAfter(
+                caminhoItem(resource.data.itemId)
+              ).data.status == 'devolvido'
+            )
+
+            ||
+
+            // Recusa da solicitação
+            (
+              request.resource.data.status == 'Recusado'
+
+              && getAfter(
+                caminhoItem(resource.data.itemId)
+              ).data.status == 'disponível'
+            )
+          );
+      }
+
+      allow update: if cancelarPedido()
+        || atenderPedido();
+
+      // Não apagar o histórico.
+      allow delete: if false;
+    }
+
+    // ==========================================
+    // 9. BLOQUEIO PADRÃO
+    // ==========================================
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+  }
+}
