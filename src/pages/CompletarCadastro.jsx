@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { Navigate, useNavigate, useLocation } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import { auth } from '../config/firebase';
+import { useAuth } from '../hooks/useAuth';
 import { completarCadastro, MatriculaEmUsoError, realizarLogout, MIN_DIGITOS_MATRICULA as MIN_DIGITOS } from '../services/usuarioService';
 import { User, Mail, IdCard, CheckCircle2, AlertCircle, Loader2, LogOut } from 'lucide-react';
 
-// Segunda etapa do primeiro acesso: a Microsoft já confirmou quem é a pessoa (nome e e-mail).
-// Falta só a matrícula ou o registro funcional, que não vem da conta Microsoft e precisa ser único.
+// Etapa para quem entrou, mas ainda não tem matrícula ou registro funcional no perfil
+// (por exemplo, contas criadas antes da regra de matrícula única). O número precisa ser único.
 export default function CompletarCadastro() {
   const { usuario, loading } = useAuth();
   const navigate = useNavigate();
@@ -27,7 +28,7 @@ export default function CompletarCadastro() {
   if (!usuario) return <Navigate to="/login" replace state={{ from: destino }} />;
   if (!usuario.perfilIncompleto) return <Navigate to={destino} replace />;
 
-  const nomeExibido = nome || usuario.nome || usuario.displayName || '';
+  const nomeExibido = nome || usuario.nome || usuario.displayName || auth.currentUser?.displayName || '';
   const numeroCurto = numero.length > 0 && numero.length < MIN_DIGITOS;
 
   const handleSubmit = async (e) => {
@@ -97,7 +98,7 @@ export default function CompletarCadastro() {
 
         <form onSubmit={handleSubmit} className="space-y-4 text-sm">
           <div className="space-y-1.5">
-            <label htmlFor="cc-email" className="block text-gray-800 font-semibold">E-mail (da conta Microsoft)</label>
+            <label htmlFor="cc-email" className="block text-gray-800 font-semibold">E-mail da sua conta</label>
             <div className="relative">
               <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500" aria-hidden="true" />
               <input id="cc-email" type="email" value={usuario.email || ''} readOnly className={`${classeCampo} text-gray-600 cursor-not-allowed`} />

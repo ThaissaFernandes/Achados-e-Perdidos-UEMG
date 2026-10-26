@@ -320,8 +320,7 @@ export default function Buscar() {
               <div className="flex flex-col items-center gap-1 pt-2">
                 <button
                   onClick={() => setVisiveis((v) => v + TAMANHO_PAGINA)}
-                  className="min-h-12 px-6 bg-white border border-gray-300 text-indigo-900 rounded-xl text-sm font-bold hover:bg-indigo-50 transition cursor-pointer"
-                >
+                  className="rounded-2xl border border-amber-500 bg-amber-700 px-6 py-4 text-base font-semibold text-white hover:bg-amber-600 transition">
                   Mostrar mais ({restantes} {restantes === 1 ? 'restante' : 'restantes'})
                 </button>
               </div>

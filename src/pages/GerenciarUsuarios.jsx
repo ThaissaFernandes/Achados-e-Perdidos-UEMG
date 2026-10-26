@@ -1,374 +1,834 @@
-import { useState, useEffect, useCallback } from 'react';
+
+import {
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+} from 'react';
+
 import { useNavigate } from 'react-router-dom';
-import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
-import { db } from '../config/firebase';
-import { useAuth } from '../context/AuthContext';
-import { useToast } from '../hooks/useToast';
-import { excluirPerfilUsuario, sincronizarMatriculas } from '../services/usuarioService';
-import Modal from '../components/Modal';
-import { 
-  ShieldCheck, 
-  ShieldAlert, 
-  Search, 
-  UserCheck, 
-  UserX, 
-  Loader2, 
+import { collection, getDocs } from 'firebase/firestore';
+
+import {
+  ShieldCheck,
+  ShieldAlert,
+  Search,
   ArrowLeft,
-  Trash2,
-  IdCard
+  IdCard,
+  Users,
+  RefreshCw,
+  LockKeyhole,
+  AlertTriangle,
+  CheckCircle2,
+  X,
 } from 'lucide-react';
+
+import { db } from '../config/firebase';
+import { useAuth } from '../hooks/useAuth';
+import { useToast } from '../hooks/useToast';
+import { ListSkeleton } from '../components/skeletons';
+
+// =====================================================
+// FUNÇÕES AUXILIARES
+// =====================================================
+
+function obterNome(usuario) {
+  return String(
+    usuario.nome ||
+    usuario.displayName ||
+    'Usuário sem nome'
+  );
+}
+
+function obterMatricula(usuario) {
+  return String(
+    usuario.numeroCadastro ||
+    usuario.matricula ||
+    ''
+  ).trim();
+}
+
+// Apenas normaliza os números para comparação.
+// Não altera os documentos do Firestore.
+function normalizarMatricula(numero) {
+  const digitos = String(numero || '').replace(/\D/g, '');
+
+  if (!digitos) return '';
+
+  return digitos.replace(/^0+/, '') || '0';
+}
+
+// Consulta compartilhada pelo carregamento inicial
+// e pelo botão de atualização manual.
+async function buscarUsuariosNoFirestore() {
+  const snapshot = await getDocs(
+    collection(db, 'usuarios')
+  );
+
+  const lista = snapshot.docs.map((documento) => ({
+    id: documento.id,
+    ...documento.data(),
+  }));
+
+  lista.sort((a, b) =>
+    obterNome(a).localeCompare(
+      obterNome(b),
+      'pt-BR',
+      { sensitivity: 'base' }
+    )
+  );
+
+  return lista;
+}
+
+// =====================================================
+// COMPONENTE PRINCIPAL
+// =====================================================
 
 export default function GerenciarUsuarios() {
   const navigate = useNavigate();
   const toast = useToast();
-  
-  const { eAdmin, usuario: adminAtual, carregando, loading: authLoading } = useAuth();
-  const emCarregamentoAuth = carregando || authLoading;
+
+  const {
+    usuario: adminAtual,
+    eAdmin,
+    carregandoAuth,
+  } = useAuth();
+
+  // ===================================================
+  // ESTADOS
+  // ===================================================
 
   const [usuarios, setUsuarios] = useState([]);
   const [busca, setBusca] = useState('');
   const [loading, setLoading] = useState(true);
-  const [processandoId, setProcessandoId] = useState(null);
-  const [verificandoMatriculas, setVerificandoMatriculas] = useState(false);
-  const [resultadoMatriculas, setResultadoMatriculas] = useState(null);
+  const [erro, setErro] = useState('');
+  const [resultadoMatriculas, setResultadoMatriculas] =
+    useState(null);
 
-  // Redireciona APENAS após terminar de carregar a autenticação e confirmar que NÃO é admin
-  useEffect(() => {
-    if (!emCarregamentoAuth && !eAdmin) {
-      navigate('/');
-    }
-  }, [eAdmin, emCarregamentoAuth, navigate]);
+  // ===================================================
+  // ATUALIZAÇÃO MANUAL
+  // ===================================================
 
-  // Função para carregar os utilizadores do Firestore
   const carregarUsuarios = useCallback(async () => {
+    if (!eAdmin) return;
+
+    setLoading(true);
+    setErro('');
+
     try {
-      setLoading(true);
-      const querySnapshot = await getDocs(collection(db, 'usuarios'));
-      const lista = querySnapshot.docs.map((d) => ({
-        id: d.id,
-        ...d.data()
-      }));
+      const lista = await buscarUsuariosNoFirestore();
+
       setUsuarios(lista);
-    } catch (err) {
-      console.error('Erro ao buscar utilizadores:', err);
+      setResultadoMatriculas(null);
+    } catch (error) {
+      console.error(
+        'Erro ao carregar usuários:',
+        error
+      );
+
+      setErro(
+        'Não foi possível consultar os usuários. Verifique sua autorização administrativa.'
+      );
+
+      toast?.erro?.('Falha ao carregar os usuários.');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [eAdmin, toast]);
+
+  // ===================================================
+  // CARREGAMENTO INICIAL
+  // ===================================================
 
   useEffect(() => {
-    if (!emCarregamentoAuth && eAdmin) {
-      carregarUsuarios();
-    }
-  }, [carregarUsuarios, emCarregamentoAuth, eAdmin]);
-
-  // Função para alternar o status de Administrador
-  const toggleStatusAdmin = async (targetUserId, eAdminAtual) => {
-    if (targetUserId === adminAtual?.uid) {
-      toast.info('Você não pode revogar o seu próprio acesso de administrador por aqui.');
+    if (carregandoAuth || !eAdmin) {
       return;
     }
 
-    setProcessandoId(targetUserId);
-    const novoStatus = !eAdminAtual;
+    let ativo = true;
 
-    try {
-      const userRef = doc(db, 'usuarios', targetUserId);
-      await updateDoc(userRef, { 
-        eAdmin: novoStatus,
-        tipo: novoStatus ? 'admin' : 'usuario'
-      });
+    async function consultarUsuarios() {
+      try {
+        const lista = await buscarUsuariosNoFirestore();
 
-      setUsuarios((prev) =>
-        prev.map((u) => (
-          u.id === targetUserId 
-            ? { ...u, eAdmin: novoStatus, tipo: novoStatus ? 'admin' : 'usuario' } 
-            : u
-        ))
+        if (!ativo) return;
+
+        setUsuarios(lista);
+        setResultadoMatriculas(null);
+        setErro('');
+      } catch (error) {
+        if (!ativo) return;
+
+        console.error(
+          'Erro ao carregar usuários:',
+          error
+        );
+
+        setErro(
+          'Não foi possível consultar os usuários. Verifique sua autorização administrativa.'
+        );
+      } finally {
+        if (ativo) {
+          setLoading(false);
+        }
+      }
+    }
+
+    consultarUsuarios();
+
+    return () => {
+      ativo = false;
+    };
+  }, [carregandoAuth, eAdmin]);
+
+  // ===================================================
+  // FILTRAR USUÁRIOS
+  // ===================================================
+
+  const usuariosFiltrados = useMemo(() => {
+    const termo = busca.trim().toLocaleLowerCase('pt-BR');
+
+    if (!termo) {
+      return usuarios;
+    }
+
+    return usuarios.filter((usuario) => {
+      const nome = obterNome(usuario)
+        .toLocaleLowerCase('pt-BR');
+
+      const email = String(usuario.email || '')
+        .toLocaleLowerCase('pt-BR');
+
+      const matricula = obterMatricula(usuario)
+        .toLocaleLowerCase('pt-BR');
+
+      return (
+        nome.includes(termo) ||
+        email.includes(termo) ||
+        matricula.includes(termo)
       );
-    } catch (err) {
-      console.error('Erro ao atualizar permissão:', err);
-      toast.erro('Não foi possível atualizar a permissão. Tente novamente.');
-    } finally {
-      setProcessandoId(null);
+    });
+  }, [usuarios, busca]);
+
+  // ===================================================
+  // VERIFICAÇÃO DE MATRÍCULAS
+  // ===================================================
+
+  // Esta verificação é somente de leitura.
+  // Não cria, atualiza ou exclui documentos.
+  // Não substitui as regras do Firestore.
+
+  const verificarMatriculas = () => {
+    const grupos = new Map();
+    const semNumero = [];
+    const numerosInvalidos = [];
+
+    for (const usuario of usuarios) {
+      const numeroOriginal = obterMatricula(usuario);
+
+      if (!numeroOriginal) {
+        semNumero.push(usuario);
+        continue;
+      }
+
+      const chave = normalizarMatricula(numeroOriginal);
+
+      if (!/^[1-9][0-9]{3,19}$/.test(chave)) {
+        numerosInvalidos.push({
+          ...usuario,
+          numeroOriginal,
+        });
+        continue;
+      }
+
+      if (!grupos.has(chave)) {
+        grupos.set(chave, []);
+      }
+
+      grupos.get(chave).push(usuario);
     }
-  };
 
-  // Registra as matrículas de contas antigas na coleção de unicidade e aponta números repetidos
-  const verificarMatriculas = async () => {
-    setVerificandoMatriculas(true);
-    try {
-      const resultado = await sincronizarMatriculas(usuarios);
-      setResultadoMatriculas(resultado);
-    } catch (err) {
-      console.error('Erro ao verificar matrículas:', err);
-      toast.erro('Não foi possível verificar as matrículas. Confira as regras de acesso do Firestore e tente de novo.');
-    } finally {
-      setVerificandoMatriculas(false);
-    }
-  };
+    const conflitos = [];
 
-  const nomeDoUsuario = (id) => {
-    const u = usuarios.find((x) => x.id === id);
-    return u ? `${u.nome || u.displayName || 'Sem nome'} (${u.email || 'sem e-mail'})` : 'Conta não encontrada';
-  };
-
-  // Função para excluir utilizador do Firestore
-  const excluirUsuario = async (alvo) => {
-    const targetUserId = alvo.id;
-    const nomeUsuario = alvo.nome || alvo.displayName;
-    if (targetUserId === adminAtual?.uid) {
-      toast.info('Você não pode excluir a sua própria conta de administrador.');
-      return;
+    for (const [chave, contas] of grupos) {
+      if (contas.length > 1) {
+        conflitos.push({
+          chave,
+          contas,
+        });
+      }
     }
 
-    const confirmacao = window.confirm(
-      `Tem a certeza de que deseja excluir permanentemente o utilizador "${nomeUsuario || 'Sem nome'}"?\n\nEsta ação removerá os dados do utilizador do sistema.`
+    conflitos.sort((a, b) =>
+      a.chave.localeCompare(
+        b.chave,
+        'pt-BR',
+        { numeric: true }
+      )
     );
 
-    if (!confirmacao) return;
-
-    setProcessandoId(targetUserId);
-
-    try {
-      // Remove o perfil e libera a matrícula/registro para um novo cadastro
-      await excluirPerfilUsuario({ id: targetUserId, numeroCadastro: alvo.numeroCadastro || alvo.matricula });
-
-      // Atualiza a lista local removendo o utilizador
-      setUsuarios((prev) => prev.filter((u) => u.id !== targetUserId));
-      toast.sucesso('Usuário excluído com sucesso.');
-    } catch (err) {
-      console.error('Erro ao excluir utilizador:', err);
-      toast.erro('Não foi possível excluir o usuário. Tente novamente.');
-    } finally {
-      setProcessandoId(null);
-    }
+    setResultadoMatriculas({
+      totalUsuarios: usuarios.length,
+      numerosDistintos: grupos.size,
+      semNumero,
+      numerosInvalidos,
+      conflitos,
+    });
   };
 
-  // Filtro de busca por Nome, E-mail ou Matrícula
-  const usuariosFiltrados = usuarios.filter((u) => {
-    const termo = busca.toLowerCase();
-    const nome = (u.nome || u.displayName || '').toLowerCase();
-    const email = (u.email || '').toLowerCase();
-    const matricula = (u.matricula || u.numeroCadastro || '').toLowerCase();
-    return nome.includes(termo) || email.includes(termo) || matricula.includes(termo);
-  });
+  // A autorização real utiliza a coleção
+  // administradores/{uid}, verificada no AuthProvider.
+  // Não consideramos o campo eAdmin de outros perfis
+  // uma confirmação de autorização administrativa.
 
-  if (emCarregamentoAuth) {
+  const ehMinhaConta = (usuario) =>
+    usuario.id === adminAtual?.uid;
+
+  // ===================================================
+  // CARREGANDO AUTENTICAÇÃO
+  // ===================================================
+
+  if (carregandoAuth) {
+    return <ListSkeleton count={3} />;
+  }
+
+  // ===================================================
+  // ACESSO RESTRITO
+  // ===================================================
+
+  if (!eAdmin) {
     return (
-      <div className="flex flex-col items-center justify-center h-64 text-gray-400">
-        <Loader2 className="w-8 h-8 animate-spin text-indigo-900 mb-2" />
-        <p className="text-xs">A verificar permissões de acesso...</p>
+      <div className="min-h-[60vh] flex flex-col items-center justify-center text-center p-6 space-y-4 max-w-md mx-auto">
+        <ShieldAlert
+          size={56}
+          className="text-amber-600"
+          aria-hidden="true"
+        />
+
+        <h2 className="text-xl font-bold text-gray-800">
+          Acesso restrito
+        </h2>
+
+        <p className="text-sm text-gray-500">
+          Esta página é exclusiva para a administração
+          do setor de Achados e Perdidos.
+        </p>
+
+        <button
+          type="button"
+          onClick={() => navigate('/')}
+          className="px-5 py-3 min-h-11 bg-indigo-900 text-white rounded-xl font-semibold text-sm hover:bg-indigo-800 transition"
+        >
+          Voltar para a página inicial
+        </button>
       </div>
     );
   }
+
+  // ===================================================
+  // CARREGAMENTO INICIAL DA LISTA
+  // ===================================================
 
   if (loading && usuarios.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center h-64 text-gray-400">
-        <Loader2 className="w-8 h-8 animate-spin text-indigo-900 mb-2" />
-        <p className="text-xs">A carregar lista de utilizadores...</p>
-      </div>
-    );
+    return <ListSkeleton count={3} />;
   }
+
+  // ===================================================
+  // INTERFACE PRINCIPAL
+  // ===================================================
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto pb-20">
-      
-      {/* Botão de Voltar */}
-      <div>
-        <button
-          onClick={() => navigate(-1)}
-          className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 hover:text-indigo-900 transition mb-2 cursor-pointer"
-        >
-          <ArrowLeft size={16} /> Voltar
-        </button>
+
+      {/* BOTÃO VOLTAR */}
+
+      <button
+        type="button"
+        onClick={() => navigate(-1)}
+        className="inline-flex items-center gap-2 text-xs font-semibold text-gray-600 hover:text-indigo-900 transition"
+      >
+        <ArrowLeft size={16} aria-hidden="true" />
+        Voltar
+      </button>
+
+      {/* CABEÇALHO */}
+
+      <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <Users
+                size={20}
+                className="text-indigo-900"
+                aria-hidden="true"
+              />
+
+              <h1 className="text-lg md:text-2xl font-bold text-gray-900">
+                Gerenciamento de Usuários
+              </h1>
+            </div>
+
+            <p className="text-xs md:text-sm text-gray-500">
+              Consulte os cadastros e verifique possíveis
+              inconsistências nas matrículas.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="bg-amber-50 border border-amber-200 text-amber-900 px-3 py-2.5 rounded-xl text-xs flex items-center gap-2">
+              <ShieldCheck
+                size={16}
+                className="text-amber-700"
+                aria-hidden="true"
+              />
+
+              <span className="font-semibold">
+                Área administrativa
+              </span>
+            </div>
+
+            <button
+              type="button"
+              onClick={carregarUsuarios}
+              disabled={loading}
+              className="min-h-11 px-4 py-2.5 rounded-xl text-xs font-semibold border border-gray-200 text-gray-700 hover:bg-gray-50 flex items-center gap-2 transition disabled:opacity-50"
+            >
+              <RefreshCw
+                size={16}
+                aria-hidden="true"
+                className={loading ? 'animate-spin' : ''}
+              />
+
+              Atualizar
+            </button>
+          </div>
+        </div>
       </div>
 
-      {/* Cabeçalho com Ações */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-5 rounded-3xl border border-gray-100 shadow-xs">
-        <div>
-          <h1 className="text-lg md:text-2xl font-bold text-gray-900">
-            Gestão de Administradores
-          </h1>
-          <p className="text-xs md:text-sm text-gray-500 mt-0.5">
-            Para criar um administrador, a pessoa entra uma vez com a conta Microsoft e conclui o cadastro. Depois, conceda a permissão na lista abaixo.
+      {/* AVISO DE SEGURANÇA */}
+
+      <div className="flex items-start gap-3 p-4 rounded-2xl bg-amber-50 border border-amber-200">
+        <LockKeyhole
+          size={19}
+          className="text-amber-800 shrink-0 mt-0.5"
+          aria-hidden="true"
+        />
+
+        <div className="space-y-1">
+          <h2 className="text-sm font-bold text-amber-900">
+            Proteção das contas
+          </h2>
+
+          <p className="text-xs text-amber-900 leading-relaxed">
+            A promoção de administradores e a exclusão
+            de contas estão temporariamente desativadas
+            nesta página. Essas operações exigem um
+            procedimento administrativo seguro e não
+            podem ser feitas alterando apenas o perfil
+            do usuário.
+          </p>
+        </div>
+      </div>
+
+      {/* ESTATÍSTICAS */}
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
+          <div className="flex items-center gap-2 text-gray-500 text-xs font-medium">
+            <Users size={16} aria-hidden="true" />
+            Contas cadastradas
+          </div>
+
+          <p className="text-2xl font-bold text-indigo-900 mt-2">
+            {usuarios.length}
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5">
-          <div className="bg-amber-50 border border-amber-200 text-amber-900 px-3 py-2 rounded-xl text-xs flex items-center gap-2">
-            <ShieldAlert size={16} className="text-amber-700 shrink-0" />
-            <span className="font-semibold">Setor Administrativo</span>
+        <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
+          <div className="flex items-center gap-2 text-gray-500 text-xs font-medium">
+            <IdCard size={16} aria-hidden="true" />
+            Contas com matrícula
           </div>
 
-          <button
-            onClick={verificarMatriculas}
-            disabled={verificandoMatriculas || loading}
-            className="bg-white border border-gray-300 text-gray-800 px-4 py-2.5 min-h-11 rounded-xl text-xs font-bold flex items-center gap-2 hover:bg-gray-50 transition shadow-xs cursor-pointer active:scale-[0.98] disabled:opacity-60"
-          >
-            {verificandoMatriculas ? <Loader2 size={16} className="animate-spin" /> : <IdCard size={16} />}
-            <span>Verificar matrículas</span>
-          </button>
-
+          <p className="text-2xl font-bold text-indigo-900 mt-2">
+            {usuarios.filter((usuario) =>
+              Boolean(obterMatricula(usuario))
+            ).length}
+          </p>
         </div>
       </div>
 
-      {/* Barra de Pesquisa */}
-      <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-xs">
+      {/* PESQUISA */}
+
+      <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
+        <label
+          htmlFor="busca-usuarios"
+          className="block text-xs font-semibold text-gray-700 mb-2"
+        >
+          Pesquisar usuários
+        </label>
+
         <div className="relative">
-          <Search size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+          <Search
+            size={18}
+            className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400"
+            aria-hidden="true"
+          />
+
           <input
-            type="text"
-            placeholder="Buscar utilizador por nome, e-mail ou matrícula..."
+            id="busca-usuarios"
+            type="search"
+            placeholder="Buscar por nome, e-mail ou matrícula..."
             value={busca}
-            onChange={(e) => setBusca(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 text-xs md:text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-indigo-900 focus:bg-white transition"
+            onChange={(event) =>
+              setBusca(event.target.value)
+            }
+            className="w-full min-h-11 pl-10 pr-4 py-2.5 text-xs md:text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-indigo-900 focus:bg-white transition"
           />
         </div>
       </div>
 
-      {/* Lista de Utilizadores */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-xs overflow-hidden">
+      {/* VERIFICAÇÃO DE MATRÍCULAS */}
+
+      <div className="bg-white p-4 sm:p-5 rounded-2xl border border-gray-100 shadow-sm space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+              <IdCard
+                size={18}
+                className="text-indigo-900"
+                aria-hidden="true"
+              />
+
+              Verificação de matrículas
+            </h2>
+
+            <p className="text-xs text-gray-500 mt-1">
+              Identifique matrículas ausentes, inválidas
+              ou repetidas entre os perfis.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={verificarMatriculas}
+            disabled={loading || usuarios.length === 0}
+            className="min-h-11 px-4 py-2.5 bg-indigo-900 text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-2 hover:bg-indigo-800 transition disabled:opacity-50"
+          >
+            <IdCard size={16} aria-hidden="true" />
+            Verificar matrículas
+          </button>
+        </div>
+
+        <p className="text-[11px] text-gray-500">
+          Esta verificação não modifica o banco de dados
+          nem valida matrículas junto à UEMG. Também não
+          confirma se existe uma reserva correspondente
+          na coleção de matrículas.
+        </p>
+      </div>
+
+      {/* ERRO DE CARREGAMENTO */}
+
+      {erro && (
+        <div
+          role="alert"
+          className="p-4 rounded-xl border border-red-200 bg-red-50 text-red-700 text-xs"
+        >
+          {erro}
+        </div>
+      )}
+
+      {/* LISTA DE USUÁRIOS */}
+
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
         <div className="divide-y divide-gray-100">
           {usuariosFiltrados.length > 0 ? (
-            usuariosFiltrados.map((u) => {
-              const eProprioAdmin = u.id === adminAtual?.uid;
+            usuariosFiltrados.map((usuario) => {
+              const propriaConta = ehMinhaConta(usuario);
 
               return (
                 <div
-                  key={u.id}
-                  className="p-4 md:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-gray-50/50 transition"
+                  key={usuario.id}
+                  className="p-4 md:p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 hover:bg-gray-50/50 transition"
                 >
-                  {/* Informações do Utilizador */}
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-900 font-bold flex items-center justify-center text-sm shrink-0">
-                      {(u.nome || u.email || 'U').charAt(0).toUpperCase()}
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-11 h-11 rounded-full bg-indigo-100 text-indigo-900 font-bold flex items-center justify-center shrink-0">
+                      {obterNome(usuario)
+                        .charAt(0)
+                        .toUpperCase()}
                     </div>
 
-                    <div className="space-y-0.5">
-                      <div className="flex items-center gap-2">
-                        <p className="text-xs md:text-sm font-bold text-gray-800">
-                          {u.nome || u.displayName || 'Utilizador Sem Nome'}
+                    <div className="min-w-0 space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-xs md:text-sm font-bold text-gray-800 break-words">
+                          {obterNome(usuario)}
                         </p>
-                        {u.eAdmin ? (
-                          <span className="bg-amber-100 text-amber-900 text-[10px] font-bold px-2 py-0.5 rounded-md uppercase flex items-center gap-1">
-                            <ShieldCheck size={12} className="text-amber-700" /> Admin
-                          </span>
-                        ) : (
-                          <span className="bg-gray-100 text-gray-600 text-[10px] font-bold px-2 py-0.5 rounded-md uppercase">
-                            Aluno
+
+                        {propriaConta && (
+                          <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-900 text-[10px] font-bold px-2 py-1 rounded-md">
+                            <ShieldCheck
+                              size={12}
+                              aria-hidden="true"
+                            />
+
+                            Minha conta admin
                           </span>
                         )}
                       </div>
-                      <p className="text-xs text-gray-500">{u.email}</p>
-                      {(u.matricula || u.numeroCadastro) && (
-                        <p className="text-[11px] text-gray-400">
-                          Matrícula: {u.matricula || u.numeroCadastro}
-                        </p>
-                      )}
+
+                      <p className="text-xs text-gray-500 break-all">
+                        {usuario.email ||
+                          'E-mail não informado'}
+                      </p>
+
+                      <p className="text-[11px] text-gray-500">
+                        Matrícula:{' '}
+                        <span className="font-medium text-gray-700">
+                          {obterMatricula(usuario) ||
+                            'Não informada'}
+                        </span>
+                      </p>
                     </div>
                   </div>
 
-                  {/* Ações: Promover / Revogar e Excluir */}
-                  <div className="flex items-center gap-2">
-                    {eProprioAdmin ? (
-                      <span className="text-[11px] font-medium text-gray-400 italic px-3 py-1.5">
-                        Sua Conta Atual
-                      </span>
-                    ) : (
-                      <>
-                        <button
-                          onClick={() => toggleStatusAdmin(u.id, u.eAdmin)}
-                          disabled={processandoId === u.id}
-                          className={`px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer ${
-                            u.eAdmin
-                              ? 'bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200'
-                              : 'bg-indigo-900 text-white hover:bg-indigo-800 shadow-xs'
-                          }`}
-                        >
-                          {processandoId === u.id ? (
-                            <Loader2 size={14} className="animate-spin" />
-                          ) : u.eAdmin ? (
-                            <>
-                              <UserX size={14} /> Revogar Admin
-                            </>
-                          ) : (
-                            <>
-                              <UserCheck size={14} /> Promover a Admin
-                            </>
-                          )}
-                        </button>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <LockKeyhole
+                      size={16}
+                      className="text-gray-400"
+                      aria-hidden="true"
+                    />
 
-                        {/* Botão de Excluir Utilizador */}
-                        <button
-                          onClick={() => excluirUsuario(u)}
-                          disabled={processandoId === u.id}
-                          title="Excluir utilizador"
-                          className="p-2 rounded-xl text-xs font-semibold bg-gray-100 text-gray-600 hover:bg-rose-100 hover:text-rose-700 transition cursor-pointer border border-gray-200 active:scale-95"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </>
-                    )}
+                    <span className="text-[11px] font-medium text-gray-500">
+                      Alterações administrativas protegidas
+                    </span>
                   </div>
                 </div>
               );
             })
           ) : (
-            <div className="p-8 text-center text-xs text-gray-400">
-              Nenhum utilizador encontrado para a busca informada.
+            <div className="p-8 text-center space-y-2">
+              <Search
+                size={28}
+                className="text-gray-300 mx-auto"
+                aria-hidden="true"
+              />
+
+              <p className="text-xs text-gray-500">
+                Nenhum usuário encontrado.
+              </p>
             </div>
           )}
         </div>
       </div>
 
+      {/* MODAL DE VERIFICAÇÃO DE MATRÍCULAS */}
 
-      {/* Resultado da verificação de matrículas */}
-      <Modal
-        aberto={Boolean(resultadoMatriculas)}
-        onFechar={() => setResultadoMatriculas(null)}
-        titulo="Verificação de matrículas"
-        larguraMax="max-w-lg"
-      >
-        {resultadoMatriculas && (
-          <div className="space-y-3 text-sm text-gray-700">
-            <ul className="space-y-1 bg-gray-50 border border-gray-100 rounded-xl p-3">
-              <li><strong>{resultadoMatriculas.registradas}</strong> matrícula(s) registrada(s) agora</li>
-              <li><strong>{resultadoMatriculas.jaRegistradas}</strong> já estavam registradas</li>
-              <li><strong>{resultadoMatriculas.semNumero.length}</strong> conta(s) sem matrícula informada</li>
-              <li className={resultadoMatriculas.conflitos.length ? 'text-rose-700 font-semibold' : ''}>
-                <strong>{resultadoMatriculas.conflitos.length}</strong> número(s) repetido(s)
-              </li>
-            </ul>
+      {resultadoMatriculas && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4"
+          onClick={() => setResultadoMatriculas(null)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="titulo-verificacao"
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] overflow-y-auto p-5 space-y-4"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2
+                  id="titulo-verificacao"
+                  className="text-base font-bold text-gray-900"
+                >
+                  Verificação de matrículas
+                </h2>
+
+                <p className="text-xs text-gray-500 mt-1">
+                  Análise local dos perfis cadastrados.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() =>
+                  setResultadoMatriculas(null)
+                }
+                aria-label="Fechar verificação"
+                className="p-2 rounded-lg text-gray-500 hover:bg-gray-100"
+              >
+                <X size={18} aria-hidden="true" />
+              </button>
+            </div>
+
+            {/* RESUMO */}
+
+            <div className="grid grid-cols-2 gap-2">
+              <div className="rounded-xl bg-gray-50 border border-gray-100 p-3">
+                <p className="text-[11px] text-gray-500">
+                  Contas analisadas
+                </p>
+
+                <p className="text-xl font-bold text-gray-900">
+                  {resultadoMatriculas.totalUsuarios}
+                </p>
+              </div>
+
+              <div className="rounded-xl bg-gray-50 border border-gray-100 p-3">
+                <p className="text-[11px] text-gray-500">
+                  Matrículas distintas
+                </p>
+
+                <p className="text-xl font-bold text-gray-900">
+                  {resultadoMatriculas.numerosDistintos}
+                </p>
+              </div>
+
+              <div className="rounded-xl bg-gray-50 border border-gray-100 p-3">
+                <p className="text-[11px] text-gray-500">
+                  Sem matrícula
+                </p>
+
+                <p className="text-xl font-bold text-gray-900">
+                  {resultadoMatriculas.semNumero.length}
+                </p>
+              </div>
+
+              <div className="rounded-xl bg-gray-50 border border-gray-100 p-3">
+                <p className="text-[11px] text-gray-500">
+                  Matrículas repetidas
+                </p>
+
+                <p className="text-xl font-bold text-gray-900">
+                  {resultadoMatriculas.conflitos.length}
+                </p>
+              </div>
+            </div>
+
+            {/* RESULTADO SEM INCONSISTÊNCIAS */}
+
+            {resultadoMatriculas.conflitos.length === 0 &&
+              resultadoMatriculas.semNumero.length === 0 &&
+              resultadoMatriculas.numerosInvalidos.length === 0 && (
+                <div className="flex items-start gap-2 bg-emerald-50 border border-emerald-200 rounded-xl p-3">
+                  <CheckCircle2
+                    size={19}
+                    className="text-emerald-700 shrink-0"
+                    aria-hidden="true"
+                  />
+
+                  <p className="text-xs text-emerald-900">
+                    Nenhuma duplicidade ou matrícula
+                    inválida foi identificada nos perfis
+                    consultados.
+                  </p>
+                </div>
+              )}
+
+            {/* MATRÍCULAS DUPLICADAS */}
 
             {resultadoMatriculas.conflitos.length > 0 && (
-              <div className="space-y-2">
-                <p className="font-semibold text-rose-800">
-                  Estas contas usam o mesmo número. Decida qual é a correta e exclua a outra:
-                </p>
-                {resultadoMatriculas.conflitos.map((c) => (
-                  <div key={`${c.chave}-${c.usuarioId}`} className="border border-rose-200 bg-rose-50 rounded-xl p-3 text-xs space-y-1">
-                    <p className="font-bold text-rose-900">Número {c.chave}</p>
-                    <p>1. {nomeDoUsuario(c.donoId)}</p>
-                    <p>2. {nomeDoUsuario(c.usuarioId)}</p>
-                  </div>
-                ))}
+              <div className="space-y-3">
+                <h3 className="text-sm font-bold text-rose-800 flex items-center gap-2">
+                  <AlertTriangle
+                    size={17}
+                    aria-hidden="true"
+                  />
+                  Matrículas duplicadas
+                </h3>
+
+                {resultadoMatriculas.conflitos.map(
+                  (conflito) => (
+                    <div
+                      key={conflito.chave}
+                      className="rounded-xl bg-rose-50 border border-rose-200 p-3 space-y-2"
+                    >
+                      <p className="text-xs font-bold text-rose-900">
+                        Número: {conflito.chave}
+                      </p>
+
+                      {conflito.contas.map((conta) => (
+                        <div
+                          key={conta.id}
+                          className="text-xs text-rose-900"
+                        >
+                          {obterNome(conta)}
+                          {' — '}
+                          {conta.email || 'Sem e-mail'}
+                        </div>
+                      ))}
+                    </div>
+                  )
+                )}
               </div>
             )}
 
-            {resultadoMatriculas.conflitos.length === 0 && (
-              <p className="text-emerald-800 font-semibold">Nenhuma matrícula repetida. A partir de agora o sistema impede duplicatas.</p>
+            {/* CONTAS SEM MATRÍCULA */}
+
+            {resultadoMatriculas.semNumero.length > 0 && (
+              <div className="space-y-2">
+                <h3 className="text-sm font-bold text-amber-900">
+                  Contas sem matrícula
+                </h3>
+
+                {resultadoMatriculas.semNumero.map(
+                  (conta) => (
+                    <p
+                      key={conta.id}
+                      className="text-xs text-gray-700 bg-amber-50 border border-amber-100 rounded-lg p-2"
+                    >
+                      {obterNome(conta)}
+                      {' — '}
+                      {conta.email || 'Sem e-mail'}
+                    </p>
+                  )
+                )}
+              </div>
             )}
+
+            {/* MATRÍCULAS INVÁLIDAS */}
+
+            {resultadoMatriculas.numerosInvalidos.length > 0 && (
+              <div className="space-y-2">
+                <h3 className="text-sm font-bold text-amber-900">
+                  Matrículas fora do formato esperado
+                </h3>
+
+                {resultadoMatriculas.numerosInvalidos.map(
+                  (conta) => (
+                    <p
+                      key={conta.id}
+                      className="text-xs text-gray-700 bg-amber-50 border border-amber-100 rounded-lg p-2"
+                    >
+                      {obterNome(conta)}
+                      {' — '}
+                      {conta.numeroOriginal}
+                    </p>
+                  )
+                )}
+              </div>
+            )}
+
+            <p className="text-[11px] text-gray-500">
+              Nenhum registro foi alterado. A verificação
+              não consulta a coleção de reservas de
+              matrículas.
+            </p>
+
+            <button
+              type="button"
+              onClick={() =>
+                setResultadoMatriculas(null)
+              }
+              className="w-full min-h-11 py-2.5 bg-indigo-900 text-white rounded-xl text-xs font-bold hover:bg-indigo-800 transition"
+            >
+              Fechar
+            </button>
           </div>
-        )}
-        <button
-          onClick={() => setResultadoMatriculas(null)}
-          className="w-full min-h-12 py-2.5 bg-indigo-900 text-white rounded-xl font-semibold text-sm hover:bg-indigo-800 transition"
-        >
-          Fechar
-        </button>
-      </Modal>
+        </div>
+      )}
     </div>
   );
 }

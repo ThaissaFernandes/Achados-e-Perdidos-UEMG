@@ -73,7 +73,7 @@ export default function Cadastro() {
       } else if (err.code === 'auth/network-request-failed') {
         setErro('Sem conexão com a internet. Verifique sua rede e tente novamente.');
       } else if (err.code === 'permission-denied') {
-        setErro('Não foi possível concluir o cadastro agora. Avise a administração (regras de acesso do sistema).');
+        setErro('Esta matrícula já está cadastrada. Confira o número informado ou entre em contato com a administração.');
       } else {
         setErro('Não foi possível criar a conta. Confira os dados e tente novamente.');
       }

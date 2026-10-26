@@ -15,7 +15,7 @@ import {
 import { criarItem, uploadFotoItem, TAMANHO_MAXIMO_FOTO_MB } from '../services/itemService';
 import { listarCategorias } from '../services/categoriaService';
 import { listarLocaisAtivos } from '../services/localService';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../hooks/useAuth';
 import FiltroDropdown from '../components/FiltroDropdown';
 import CapturaFoto from '../components/CapturaFoto';
 

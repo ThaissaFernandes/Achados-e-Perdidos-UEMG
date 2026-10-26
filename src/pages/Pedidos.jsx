@@ -1,3 +1,4 @@
+import { ListSkeleton } from '../components/skeletons';
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
@@ -13,7 +14,7 @@ import {
   Calendar,
   Inbox,
 } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../hooks/useAuth';
 import { useToast } from '../hooks/useToast';
 import { usePedidosPendentes } from '../hooks/usePedidosPendentes';
 import { confirmarDevolucao, recusarPedido } from '../services/solicitacaoService';
@@ -112,10 +113,7 @@ export default function Pedidos() {
       </p>
 
       {carregando ? (
-        <div className="flex flex-col items-center py-12 text-gray-600" role="status">
-          <Loader2 className="w-8 h-8 animate-spin text-indigo-900 mb-2" aria-hidden="true" />
-          <p className="text-sm">Carregando pedidos...</p>
-        </div>
+        <ListSkeleton count={4} />
       ) : erro ? (
         <div className="bg-rose-50 border border-rose-100 text-rose-800 rounded-3xl p-8 text-center space-y-2" role="alert">
           <AlertCircle className="w-8 h-8 mx-auto text-rose-500" aria-hidden="true" />
