@@ -1,25 +1,26 @@
-@import "tailwindcss";
 
-/* Estilos globais e travas de segurança para dispositivos móveis */
-html, body {
+@import "tailwindcss";
+@source "./";
+
+/* ============================================
+   ESTILOS GLOBAIS
+   ============================================ */
+
+html,
+body {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
-  background-color: #f9fafb; /* bg-gray-50 do Tailwind */
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-
-  /* Evita rolagem horizontal e quebra de layout no mobile */
+  background-color: #f9fafb;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont,
+    'Segoe UI', Roboto, sans-serif;
   max-width: 100vw;
   overflow-x: hidden;
   scroll-behavior: smooth;
 }
 
-/*
- * Campos de formulário com 16px em telas pequenas.
- * Abaixo disso o Safari do iPhone aplica zoom automático ao focar o campo,
- * desorganizando o layout (Nielsen 5 - Prevenção de erros / usabilidade mobile).
- * Esta regra fica fora das camadas do Tailwind, por isso vale sobre classes como text-xs.
- */
+/* Evita zoom automático no Safari ao focar campos
+   com fonte menor que 16px em dispositivos móveis. */
 @media (max-width: 767px) {
   input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
   select,
@@ -28,23 +29,29 @@ html, body {
   }
 }
 
-/* Foco visível e consistente para navegação por teclado (acessibilidade) */
+/* Foco visível para navegação por teclado */
 :where(a, button, input, select, textarea, [tabindex]):focus-visible {
-  outline: 2px solid #4338ca; /* indigo-700 */
+  outline: 2px solid #4338ca;
   outline-offset: 2px;
 }
 
-/* Respeita a preferência do sistema por menos animações */
+/* Redução de animações para acessibilidade */
 @media (prefers-reduced-motion: reduce) {
-  html, body { scroll-behavior: auto; }
-  *, *::before, *::after {
+  html,
+  body {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
 }
 
-/* Link "Pular para o conteúdo": visível apenas ao receber foco pelo teclado */
+/* Link de acessibilidade: pular para conteúdo */
 .skip-link {
   position: absolute;
   left: 0.75rem;
@@ -58,16 +65,476 @@ html, body {
   box-shadow: 0 4px 12px rgb(0 0 0 / 0.2);
   transition: top 0.15s;
 }
+
 .skip-link:focus {
   top: 0.75rem;
 }
 
-/* Esconde a barra de rolagem (utilizado nos filtros e tags horizontais no mobile) */
+/* Esconde barras de rolagem horizontais */
 @utility no-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
 
   &::-webkit-scrollbar {
     display: none;
+  }
+}
+
+/* ============================================
+   IDENTIDADE VISUAL UEMG
+   ============================================ */
+
+@theme {
+  --color-indigo-50: #fff5f0;
+  --color-indigo-100: #fbe8dd;
+  --color-indigo-200: #efd2c0;
+  --color-indigo-300: #dfb49e;
+  --color-indigo-400: #cb947b;
+  --color-indigo-500: #ba7052;
+  --color-indigo-600: #a35d45;
+  --color-indigo-700: #8d4e3b;
+  --color-indigo-800: #783f31;
+  --color-indigo-900: #623529;
+  --color-indigo-950: #45251d;
+}
+
+/* ============================================
+   TEMA CLARO E ESCURO
+   ============================================ */
+
+:root {
+  color-scheme: light;
+}
+
+:root.dark {
+  color-scheme: dark;
+}
+
+.dark {
+  color: #eef5f8;
+}
+
+/* ============================================
+   CARREGAMENTO DE PÁGINAS
+   ============================================ */
+
+.page-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  min-height: 11rem;
+  padding: 2rem;
+  color: #623529;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.page-loading-spinner {
+  width: 1.25rem;
+  height: 1.25rem;
+  border: 3px solid #dfb49e;
+  border-top-color: #623529;
+  border-radius: 50%;
+  animation: page-loading-rotate 0.75s linear infinite;
+}
+
+@keyframes page-loading-rotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.dark .page-loading {
+  color: #f6e1d5;
+}
+
+.dark .page-loading-spinner {
+  border-color: #76544a;
+  border-top-color: #f6e1d5;
+}
+
+/* ============================================
+   SUPERFÍCIES — MODO ESCURO
+   ============================================ */
+
+.dark body,
+.dark .bg-gray-50,
+.dark .bg-gray-100 {
+  background-color: #121b21;
+}
+
+.dark .bg-white {
+  background-color: #202c32;
+}
+
+.dark .bg-gray-50\/80 {
+  background-color: #172229;
+}
+
+.dark .bg-indigo-50,
+.dark .bg-indigo-100 {
+  background-color: #382c2b;
+}
+
+.dark .bg-indigo-50\/70 {
+  background-color: #382c2b;
+}
+
+.dark .bg-amber-50 {
+  background-color: #40351d;
+}
+
+.dark .bg-amber-100 {
+  background-color: #493918;
+}
+
+.dark .bg-red-50 {
+  background-color: #3b2525;
+}
+
+.dark .bg-red-100 {
+  background-color: #492b2b;
+}
+
+.dark .bg-green-50 {
+  background-color: #1d382e;
+}
+
+.dark .bg-green-100 {
+  background-color: #244636;
+}
+
+/* ============================================
+   TEXTOS — MODO ESCURO
+   ============================================ */
+
+.dark .text-gray-900,
+.dark .text-gray-800,
+.dark .text-gray-700 {
+  color: #f2f6f7;
+}
+
+.dark .text-gray-600,
+.dark .text-gray-500 {
+  color: #b6cbd4;
+}
+
+.dark .text-gray-400 {
+  color: #b5c9d1;
+}
+
+.dark .text-gray-300 {
+  color: #d5e2e7;
+}
+
+/* Terracota clara para textos e ícones */
+.dark .text-indigo-900:not(.bg-white):not(.bg-indigo-50),
+.dark .text-indigo-800,
+.dark .text-indigo-700 {
+  color: #f3cdb9;
+}
+
+/* Avisos */
+.dark .text-amber-900,
+.dark .text-amber-800,
+.dark .text-amber-700,
+.dark .text-amber-600 {
+  color: #ffe2a3;
+}
+
+/* Erros */
+.dark .text-red-800,
+.dark .text-red-700,
+.dark .text-red-500 {
+  color: #ffb5b5;
+}
+
+/* Sucesso */
+.dark .text-green-800,
+.dark .text-green-700 {
+  color: #b6efce;
+}
+
+/* Informações */
+.dark .text-blue-900,
+.dark .text-blue-800,
+.dark .text-blue-700 {
+  color: #b9d9ff;
+}
+
+/* ============================================
+   BORDAS — MODO ESCURO
+   ============================================ */
+
+.dark .border-gray-100,
+.dark .border-gray-200,
+.dark .border-gray-300 {
+  border-color: #394b53;
+}
+
+.dark .border-indigo-100 {
+  border-color: #75534b;
+}
+
+.dark .border-amber-200,
+.dark .border-amber-300 {
+  border-color: #886d3a;
+}
+
+.dark .border-red-200,
+.dark .border-red-300 {
+  border-color: #8e5252;
+}
+
+.dark .border-green-200 {
+  border-color: #567c63;
+}
+
+/* ============================================
+   FORMULÁRIOS — MODO ESCURO
+   ============================================ */
+
+.dark input,
+.dark select,
+.dark textarea {
+  color: #eef5f8;
+  background-color: #202c32;
+  border-color: #52636c;
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: #a3bbc6;
+}
+
+.dark :where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline-color: #f2c4a9;
+}
+
+/* ============================================
+   BOTÕES E NAVEGAÇÃO
+   ============================================ */
+
+.dark .bg-indigo-900 {
+  background-color: #623529;
+}
+
+.theme-toggle {
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+}
+
+.theme-toggle:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 3px;
+}
+
+/* Navegação inferior no celular */
+.dark nav[aria-label="Navegação principal"].md\:hidden {
+  background-color: #202c32;
+  border-color: #394b53;
+}
+
+.dark nav[aria-label="Navegação principal"].md\:hidden a[aria-current="page"] {
+  color: #f4cdb8;
+}
+
+.dark nav[aria-label="Navegação principal"].md\:hidden a:not([aria-current="page"]) {
+  color: #c5d7df;
+}
+
+/* Preserva texto escuro em botões brancos do cabeçalho */
+.dark header a.bg-white.text-indigo-900 {
+  background-color: #fff7f1;
+  color: #623529;
+}
+
+/* Botão de busca */
+.dark .home-search-button,
+.dark .home-search-button:hover {
+  background-color: #fff1e8;
+  color: #49271e;
+}
+
+.dark .home-search-button:hover {
+  background-color: #f3d8c8;
+}
+
+.dark .home-search-button svg {
+  color: inherit;
+}
+
+/* Botões com fundo escuro devem manter texto branco */
+.dark button.bg-indigo-900,
+.dark a.bg-indigo-900 {
+  color: #fff;
+}
+
+.dark button.bg-rose-600 {
+  background-color: #be3456;
+  color: #fff;
+}
+
+.dark button.bg-rose-600:hover {
+  background-color: #a82748;
+}
+
+/* ============================================
+   PERFIL — AVISO INFORMATIVO
+   ============================================ */
+
+/* Modo claro */
+.profile-info-box {
+  background-color: #eff6ff;
+  border: 1px solid #bfdbfe;
+}
+
+.profile-info-heading {
+  color: #1e3a8a;
+}
+
+.profile-info-icon {
+  color: #1d4ed8;
+}
+
+.profile-info-description {
+  color: #1e40af;
+}
+
+/* Modo escuro */
+html.dark .profile-info-box,
+.dark .profile-info-box,
+html[data-theme="dark"] .profile-info-box {
+  background-color: #182e3b;
+  border-color: #39596d;
+}
+
+html.dark .profile-info-heading,
+.dark .profile-info-heading,
+html[data-theme="dark"] .profile-info-heading {
+  color: #e1f0ff;
+}
+
+html.dark .profile-info-icon,
+.dark .profile-info-icon,
+html[data-theme="dark"] .profile-info-icon {
+  color: #93c5fd;
+}
+
+html.dark .profile-info-description,
+.dark .profile-info-description,
+html[data-theme="dark"] .profile-info-description {
+  color: #d0e2f0;
+}
+
+/* ============================================
+   ITENS — IMAGENS E CARTÕES
+   ============================================ */
+
+.item-card {
+  transition:
+    box-shadow 180ms ease,
+    border-color 180ms ease;
+}
+
+.item-card-image {
+  background-color: #f4f0ed;
+}
+
+.item-card:hover .item-card-image img {
+  transform: scale(1.04);
+}
+
+.item-image-placeholder {
+  background: linear-gradient(
+    135deg,
+    #f5e7df,
+    #e7edf0
+  );
+  color: #785448;
+}
+
+/* Modo escuro */
+.dark .item-card-image {
+  background-color: #283941;
+  border-color: #42535b;
+}
+
+.dark .item-image-placeholder {
+  background: linear-gradient(
+    135deg,
+    #32434b,
+    #263238
+  );
+  color: #d9e5e9;
+}
+
+/* ============================================
+   MENSAGENS DE SUCESSO — MODO ESCURO
+   ============================================ */
+
+.dark .bg-emerald-50 {
+  background-color: #19382e;
+}
+
+.dark .bg-emerald-100 {
+  background-color: #244636;
+}
+
+.dark .border-emerald-200 {
+  border-color: #4f8569;
+}
+
+.dark .text-emerald-900,
+.dark .text-emerald-800,
+.dark .text-emerald-700 {
+  color: #c4f4d9;
+}
+
+/* ============================================
+   MENSAGENS DE ERRO — MODO ESCURO
+   ============================================ */
+
+.dark .bg-rose-50 {
+  background-color: #40272e;
+}
+
+.dark .bg-rose-100 {
+  background-color: #4d2d36;
+}
+
+.dark .border-rose-100,
+.dark .border-rose-200 {
+  border-color: #925665;
+}
+
+.dark .text-rose-900,
+.dark .text-rose-800,
+.dark .text-rose-700,
+.dark .text-rose-600,
+.dark .text-rose-500 {
+  color: #ffc2d0;
+}
+
+/* ============================================
+   ANIMAÇÕES E ESTADOS
+   ============================================ */
+
+.dark .animate-pulse {
+  opacity: 0.8;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-loading-spinner {
+    animation: none;
+  }
+
+  .item-card:hover .item-card-image img {
+    transform: none;
   }
 }
