@@ -1,11 +1,24 @@
+
 import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+
+import {
+  getAuth,
+  connectAuthEmulator
+} from 'firebase/auth';
+
+import {
+  getFirestore,
+  connectFirestoreEmulator
+} from 'firebase/firestore';
+
 import { getStorage } from 'firebase/storage';
 
-// Configuração lida das variáveis de ambiente do Vite (arquivo .env, não versionado).
-// A chave web do Firebase não é um segredo, mas manter a configuração fora do código
-// facilita trocar de projeto (teste/produção). A proteção real está nas Regras do Firestore.
+import {
+  initializeAppCheck,
+  ReCaptchaV3Provider
+} from 'firebase/app-check';
+
+// Configurações do Firebase
 export const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
@@ -15,8 +28,50 @@ export const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
+// Inicialização
 const app = initializeApp(firebaseConfig);
 
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const storage = getStorage(app);
+
+// Modo de teste ativado explicitamente
+const usarEmuladores =
+  import.meta.env.DEV &&
+  import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true';
+
+// Conecta aos emuladores locais
+if (usarEmuladores) {
+  if (firebaseConfig.projectId !== 'achados-e-perdidos-uemg') {
+    throw new Error('Projeto Firebase inesperado no modo de teste.');
+  }
+
+  connectAuthEmulator(
+    auth,
+    'http://127.0.0.1:9099',
+    { disableWarnings: true }
+  );
+
+  connectFirestoreEmulator(
+    db,
+    '127.0.0.1',
+    8080
+  );
+
+  console.info(
+    'Firebase em modo de teste: Authentication e Firestore locais.'
+  );
+}
+
+// App Check para ambiente real
+if (
+  !usarEmuladores &&
+  import.meta.env.VITE_FIREBASE_APPCHECK_SITE_KEY
+) {
+  initializeAppCheck(app, {
+    provider: new ReCaptchaV3Provider(
+      import.meta.env.VITE_FIREBASE_APPCHECK_SITE_KEY
+    ),
+    isTokenAutoRefreshEnabled: true,
+  });
+}
