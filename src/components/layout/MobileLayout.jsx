@@ -1,7 +1,20 @@
 import { useState } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { Home, PlusCircle, User, Search, ShieldCheck, LogIn, ClipboardList } from 'lucide-react';
-import { useAuth } from '../../context/AuthContext';
+
+import {
+  Home,
+  PlusCircle,
+  User,
+  Search,
+  ShieldCheck,
+  LogIn,
+  ClipboardList,
+  Sun,
+  Moon,
+} from 'lucide-react';
+
+import { useTheme } from '../../hooks/useTheme';
+import { useAuth } from '../../hooks/useAuth';
 import { usePedidosPendentes } from '../../hooks/usePedidosPendentes';
 
 // Ícone com selo numérico (ex.: pedidos pendentes)
@@ -21,6 +34,7 @@ const IconeComSelo = ({ Icon, size, badge }) => (
 
 export default function MobileLayout() {
   const location = useLocation();
+  const { tema, alternarTema } = useTheme();
   const { usuario, eAdmin } = useAuth() || {};
   const [logoErro, setLogoErro] = useState(false);
 
@@ -99,7 +113,7 @@ export default function MobileLayout() {
           </Link>
 
           {/* Navegação Superior + Badge do Usuário (Tablet/Desktop: md) */}
-          <nav className="hidden md:flex items-center gap-2" aria-label="Navegação principal">
+          <nav className="hidden md:flex items-center gap-2 ml-auto" aria-label="Navegação principal">
             {navItems.map(({ to, label, ariaLabel, Icon, badge }) => (
               <Link
                 key={to}
@@ -143,8 +157,24 @@ export default function MobileLayout() {
               </Link>
             )}
           </nav>
+          {/* Tema ao lado dos controles da conta, sem separar logo e navegação. */}
+          <button
+            type="button"
+            className="theme-toggle shrink-0 ml-auto md:ml-1 border border-white/40 bg-white/10 text-white hover:bg-white/20 transition-colors"
+            onClick={alternarTema}
+            aria-label={tema === 'dark' ? 'Ativar modo claro' : 'Ativar modo escuro'}
+            title={tema === 'dark' ? 'Ativar modo claro' : 'Ativar modo escuro'}
+          >
+            {tema === 'dark' ? <Sun size={21} aria-hidden="true" /> : <Moon size={21} aria-hidden="true" />}
+          </button>
         </div>
       </header>
+
+      {import.meta.env.VITE_AMBIENTE_DEMO === 'true' && (
+        <div role="note" className="bg-amber-50 border-b border-amber-200 px-4 py-2 text-center text-xs font-medium text-amber-950">
+          Ambiente demonstrativo do TCC — objetos, usuários e solicitações fictícios.
+        </div>
+      )}
 
       {/* Área Principal de Conteúdo */}
       <main id="conteudo" tabIndex={-1} className="flex-1 w-full mx-auto max-w-7xl p-4 pb-24 md:p-8 md:pb-12 outline-none">
@@ -160,6 +190,7 @@ export default function MobileLayout() {
           <p className="text-gray-500 text-xs">Sistema desenvolvido para Trabalho de Conclusão de Curso (TCC)</p>
         </div>
       </footer>
+
       {/* Bottom Navigation (Somente no Mobile) */}
       <nav
         className="md:hidden fixed bottom-0 inset-x-0 z-30 bg-white border-t border-gray-100 px-4 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] flex justify-around items-center shadow-lg"
