@@ -16,9 +16,6 @@ import 'firebase/compat/firestore';
 // 1. CONFIGURAÇÃO DO FIREBASE EMULATOR
 // =====================================================
 
-// Projeto fictício, separado do Firebase real.
-// Os testes usam apenas o Firestore Emulator.
-
 const ambiente = await initializeTestEnvironment({
   projectId: 'demo-achados-seguranca',
 
@@ -56,7 +53,6 @@ const visitante = ambiente
   .unauthenticatedContext()
   .firestore();
 
-// Usuários adicionais para testar matrículas.
 const alunoNovo = ambiente.authenticatedContext(
   'aluno-novo',
   { email: 'novo@teste.com' }
@@ -113,6 +109,9 @@ async function preparar() {
         fotoUrl: '',
         status: 'disponível',
         solicitacaoAtivaId: null,
+
+        // Item sem solicitações anteriores.
+        teveSolicitacoes: false,
       }),
 
       db.doc('solicitacoesDevolucao/pedido-aluno').set({
@@ -121,7 +120,6 @@ async function preparar() {
         status: 'Pendente',
       }),
 
-      // Matrículas fictícias já reservadas.
       db.doc('matriculas/20260001').set({
         uid: 'aluno-teste',
         criadoEm: firebase.firestore.Timestamp.now(),
@@ -136,7 +134,7 @@ async function preparar() {
 }
 
 // =====================================================
-// CRIAR RESERVA FICTÍCIA
+// PREPARAR RESERVA FICTÍCIA
 // =====================================================
 
 async function prepararReserva(
@@ -165,6 +163,9 @@ async function prepararReserva(
         fotoUrl: '',
         status: 'em análise',
         solicitacaoAtivaId: `pedido-${id}`,
+
+        // Um item reservado já teve uma solicitação.
+        teveSolicitacoes: true,
       }),
 
       db.doc(`solicitacoesDevolucao/pedido-${id}`).set({
@@ -182,7 +183,7 @@ async function prepararReserva(
 }
 
 // =====================================================
-// CRIAR SOLICITAÇÃO DE DEVOLUÇÃO
+// CRIAR SOLICITAÇÃO DE RETIRADA
 // =====================================================
 
 async function criarPedido(
@@ -201,6 +202,7 @@ async function criarPedido(
       `solicitacoesDevolucao/${pedidoId}`
     );
 
+    // Todas as leituras antes das escritas.
     const perfil = await tx.get(usuarioRef);
     const item = await tx.get(itemRef);
 
@@ -224,9 +226,12 @@ async function criarPedido(
       dataSolicitacao: agora(),
     });
 
+    // Reserva e marcação do histórico
+    // acontecem na mesma transação.
     tx.update(itemRef, {
       status: 'em análise',
       solicitacaoAtivaId: pedidoId,
+      teveSolicitacoes: true,
     });
   });
 }
@@ -265,6 +270,7 @@ async function finalizar(
       ...campos,
     });
 
+    // Não altera teveSolicitacoes.
     tx.update(itemRef, {
       status: statusItem,
       solicitacaoAtivaId: null,
@@ -275,13 +281,6 @@ async function finalizar(
 // =====================================================
 // CADASTRAR PERFIL E MATRÍCULA JUNTOS
 // =====================================================
-
-// Utiliza um batch para testar as regras de
-// criação atômica.
-//
-// O usuarioService.js utiliza uma transação,
-// mas as regras getAfter() também devem funcionar
-// quando os dois documentos são gravados juntos.
 
 function criarCadastro(
   db,
@@ -367,6 +366,8 @@ try {
           admin.doc('itens/item-admin').set({
             titulo: 'Objeto do administrador',
             status: 'disponível',
+            teveSolicitacoes: false,
+            solicitacaoAtivaId: null,
           })
         );
       }
@@ -461,6 +462,11 @@ try {
         );
 
         assert.equal(
+          item.data().teveSolicitacoes,
+          true
+        );
+
+        assert.equal(
           pedido.data().status,
           'Pendente'
         );
@@ -477,6 +483,8 @@ try {
               .set({
                 titulo: 'Item sozinho',
                 status: 'disponível',
+                solicitacaoAtivaId: null,
+                teveSolicitacoes: false,
               });
           }
         );
@@ -485,6 +493,7 @@ try {
           aluno.doc('itens/item-sozinho').update({
             status: 'em análise',
             solicitacaoAtivaId: 'pedido-inexistente',
+            teveSolicitacoes: true,
           })
         );
       }
@@ -500,6 +509,8 @@ try {
               .set({
                 titulo: 'Item isolado',
                 status: 'disponível',
+                solicitacaoAtivaId: null,
+                teveSolicitacoes: false,
               });
           }
         );
@@ -575,6 +586,12 @@ try {
           null
         );
 
+        // O histórico deve permanecer marcado.
+        assert.equal(
+          item.data().teveSolicitacoes,
+          true
+        );
+
         assert.equal(
           pedido.data().status,
           'Cancelado'
@@ -633,6 +650,11 @@ try {
           item.data().solicitacaoAtivaId,
           null
         );
+
+        assert.equal(
+          item.data().teveSolicitacoes,
+          true
+        );
       }
     );
 
@@ -667,6 +689,11 @@ try {
           item.data().solicitacaoAtivaId,
           null
         );
+
+        assert.equal(
+          item.data().teveSolicitacoes,
+          true
+        );
       }
     );
 
@@ -680,6 +707,8 @@ try {
               .set({
                 titulo: 'Item concorrente',
                 status: 'disponível',
+                solicitacaoAtivaId: null,
+                teveSolicitacoes: false,
               });
           }
         );
@@ -797,12 +826,7 @@ try {
 
     // =================================================
     // GRUPO 4: MATRÍCULAS E DADOS PESSOAIS
-    // ETAPA 3 DE 6
     // =================================================
-
-    // -------------------------------------------------
-    // TESTE 1: CADASTRO VÁLIDO
-    // -------------------------------------------------
 
     await t.test(
       'Aluno cria perfil e matrícula juntos',
@@ -854,10 +878,6 @@ try {
       }
     );
 
-    // -------------------------------------------------
-    // TESTE 2: MATRÍCULA SEM PERFIL
-    // -------------------------------------------------
-
     await t.test(
       'Aluno não pode reservar matrícula sem perfil correspondente',
       async () => {
@@ -873,10 +893,6 @@ try {
         );
       }
     );
-
-    // -------------------------------------------------
-    // TESTE 3: PERFIL SEM MATRÍCULA
-    // -------------------------------------------------
 
     await t.test(
       'Aluno não pode criar perfil sem reserva da matrícula',
@@ -898,17 +914,10 @@ try {
       }
     );
 
-    // -------------------------------------------------
-    // TESTE 4: MATRÍCULA DUPLICADA
-    // -------------------------------------------------
-
     await t.test(
       'Matrícula duplicada é recusada sem criar outro perfil',
       async () => {
         await preparar();
-
-        // A matrícula 20260001 já pertence
-        // a aluno-teste.
 
         await assertFails(
           criarCadastro(
@@ -920,9 +929,6 @@ try {
           )
         );
 
-        // A tentativa recusada não pode criar
-        // um segundo perfil.
-
         const perfilDuplicado = await alunoDuplicado
           .doc('usuarios/aluno-duplicado')
           .get();
@@ -931,9 +937,6 @@ try {
           perfilDuplicado.exists,
           false
         );
-
-        // Confere que a matrícula continua
-        // pertencendo ao dono original.
 
         const matriculaOriginal = await aluno
           .doc('matriculas/20260001')
@@ -945,10 +948,6 @@ try {
         );
       }
     );
-
-    // -------------------------------------------------
-    // TESTE 5: ALTERAÇÃO DE MATRÍCULA
-    // -------------------------------------------------
 
     await t.test(
       'Aluno não pode alterar matrícula do próprio perfil',
@@ -974,10 +973,6 @@ try {
       }
     );
 
-    // -------------------------------------------------
-    // TESTE 6: PRIVACIDADE DA MATRÍCULA
-    // -------------------------------------------------
-
     await t.test(
       'Aluno não pode ler matrícula pertencente a outro usuário',
       async () => {
@@ -989,9 +984,6 @@ try {
             .get()
         );
 
-        // O proprietário continua podendo
-        // consultar sua própria matrícula.
-
         await assertSucceeds(
           aluno
             .doc('matriculas/20260001')
@@ -999,7 +991,6 @@ try {
         );
       }
     );
-
   });
 } finally {
   await ambiente.cleanup();
