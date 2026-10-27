@@ -1,10 +1,6 @@
 
 import { useState, useEffect } from 'react';
-
-import {
-  useParams,
-  useNavigate,
-} from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 
 import {
   MapPin,
@@ -16,44 +12,29 @@ import {
   Save,
   ShieldAlert,
   Info,
+  Trash2,
+  AlertCircle,
 } from 'lucide-react';
 
 import { PageSkeleton } from '../components/skeletons';
-
 import { db } from '../config/firebase';
+import { doc, getDoc } from 'firebase/firestore';
 
-import {
-  doc,
-  getDoc,
-} from 'firebase/firestore';
-
-import {
-  listarCategorias,
-} from '../services/categoriaService';
-
-import {
-  listarLocaisAtivos,
-} from '../services/localService';
+import { listarCategorias } from '../services/categoriaService';
+import { listarLocaisAtivos } from '../services/localService';
 
 import {
   atualizarItem,
+  excluirItem,
 } from '../services/itemService';
 
 import { useAuth } from '../hooks/useAuth';
 
-// =====================================================
-// PÁGINA DE EDIÇÃO ADMINISTRATIVA
-// =====================================================
-
 export default function EditarItem() {
   const { id } = useParams();
-
   const navigate = useNavigate();
 
-  const {
-    eAdmin,
-    carregandoAuth,
-  } = useAuth();
+  const { eAdmin, carregandoAuth } = useAuth();
 
   // ===================================================
   // ESTADOS
@@ -63,18 +44,16 @@ export default function EditarItem() {
   const [locais, setLocais] = useState([]);
 
   const [loading, setLoading] = useState(true);
-
-  const [
-    carregandoSalvar,
-    setCarregandoSalvar,
-  ] = useState(false);
+  const [carregandoSalvar, setCarregandoSalvar] = useState(false);
+  const [excluindo, setExcluindo] = useState(false);
+  const [podeExcluir, setPodeExcluir] = useState(false);
 
   const [submitted, setSubmitted] = useState(false);
 
   const [erro, setErro] = useState('');
+  const [erroExclusao, setErroExclusao] = useState('');
 
-  const [statusAtual, setStatusAtual] =
-    useState('disponível');
+  const [statusAtual, setStatusAtual] = useState('disponível');
 
   const [formData, setFormData] = useState({
     title: '',
@@ -85,15 +64,10 @@ export default function EditarItem() {
   });
 
   // ===================================================
-  // CARREGAMENTO DOS DADOS
+  // CARREGAMENTO
   // ===================================================
 
   useEffect(() => {
-    // Aguarda a autenticação e impede consultas
-    // quando o usuário não é administrador.
-    //
-    // A tela de acesso restrito já é exibida
-    // na renderização do componente.
     if (carregandoAuth || !eAdmin) {
       return;
     }
@@ -103,6 +77,7 @@ export default function EditarItem() {
     async function carregarDados() {
       setLoading(true);
       setErro('');
+      setErroExclusao('');
 
       try {
         const [
@@ -112,9 +87,7 @@ export default function EditarItem() {
         ] = await Promise.all([
           listarCategorias(),
           listarLocaisAtivos(),
-          getDoc(
-            doc(db, 'itens', id)
-          ),
+          getDoc(doc(db, 'itens', id)),
         ]);
 
         if (!ativo) {
@@ -122,11 +95,7 @@ export default function EditarItem() {
         }
 
         if (!itemSnap.exists()) {
-          setErro(
-            'Item não encontrado no sistema.'
-          );
-
-          setLoading(false);
+          setErro('Item não encontrado no sistema.');
           return;
         }
 
@@ -155,11 +124,15 @@ export default function EditarItem() {
             itemData.fotoUrl || '',
         });
 
-        setStatusAtual(
-          itemData.status || 'disponível'
+        setStatusAtual(itemData.status || 'disponível');
+
+        // Apenas itens comprovadamente sem histórico
+        // podem ter o botão de exclusão habilitado.
+        setPodeExcluir(
+          itemData.teveSolicitacoes === false &&
+          itemData.solicitacaoAtivaId == null
         );
 
-        // Ordenar categorias.
         const categoriasOrdenadas = [
           ...(dadosCategorias || []),
         ].sort((a, b) => {
@@ -182,7 +155,6 @@ export default function EditarItem() {
           );
         });
 
-        // Ordenar locais.
         const locaisOrdenados = [
           ...(dadosLocais || []),
         ].sort((a, b) => {
@@ -234,14 +206,10 @@ export default function EditarItem() {
     return () => {
       ativo = false;
     };
-  }, [
-    id,
-    eAdmin,
-    carregandoAuth,
-  ]);
+  }, [id, eAdmin, carregandoAuth]);
 
   // ===================================================
-  // ATUALIZAR CAMPO DO FORMULÁRIO
+  // ATUALIZAR FORMULÁRIO
   // ===================================================
 
   const atualizarCampo = (campo, valor) => {
@@ -266,16 +234,12 @@ export default function EditarItem() {
     }
 
     if (!formData.title.trim()) {
-      setErro(
-        'Informe o título do item.'
-      );
+      setErro('Informe o título do item.');
       return;
     }
 
     if (!formData.category) {
-      setErro(
-        'Selecione uma categoria.'
-      );
+      setErro('Selecione uma categoria.');
       return;
     }
 
@@ -286,23 +250,24 @@ export default function EditarItem() {
       return;
     }
 
+    if (excluindo || carregandoSalvar) {
+      return;
+    }
+
     setErro('');
+    setErroExclusao('');
     setCarregandoSalvar(true);
 
     try {
-      await atualizarItem(
-        id,
-        {
-          titulo: formData.title.trim(),
-          categoriaId: formData.category,
-          localEncontrado: formData.location,
-          descricao: formData.description.trim(),
-        }
-      );
+      await atualizarItem(id, {
+        titulo: formData.title.trim(),
+        categoriaId: formData.category,
+        localEncontrado: formData.location,
+        descricao: formData.description.trim(),
+      });
 
       setSubmitted(true);
 
-      // Redireciona após informar o sucesso.
       setTimeout(() => {
         navigate(`/item/${id}`);
       }, 1500);
@@ -330,7 +295,78 @@ export default function EditarItem() {
   };
 
   // ===================================================
-  // AUTENTICAÇÃO AINDA CARREGANDO
+  // EXCLUSÃO PERMANENTE
+  // ===================================================
+
+  const handleExcluir = async () => {
+    if (
+      !eAdmin ||
+      excluindo ||
+      carregandoSalvar ||
+      !podeExcluir ||
+      statusAtual !== 'disponível'
+    ) {
+      return;
+    }
+
+    const confirmou = window.confirm(
+      `Deseja excluir permanentemente "${formData.title}"?\n\n` +
+      'Esta ação não poderá ser desfeita.'
+    );
+
+    if (!confirmou) {
+      return;
+    }
+
+    setErro('');
+    setErroExclusao('');
+    setExcluindo(true);
+
+    try {
+      await excluirItem(id);
+
+      navigate('/', {
+        replace: true,
+      });
+
+    } catch (error) {
+      // Exibe informações detalhadas no console
+      // para identificar em qual etapa ocorreu a falha.
+      console.error('Erro ao excluir pertence:', {
+        code: error?.code,
+        message: error?.message,
+        error,
+      });
+
+      let mensagem;
+
+      if (error?.code === 'permission-denied') {
+        mensagem =
+          'O Firebase recusou a operação por falta de permissão. Verifique se as regras do Firestore foram publicadas e se sua conta está autorizada como administradora.';
+
+      } else if (error?.code === 'failed-precondition') {
+        mensagem =
+          'O Firestore não conseguiu concluir a consulta. Pode ser necessário configurar um índice ou verificar uma condição do banco de dados.';
+
+      } else if (error?.code === 'unavailable') {
+        mensagem =
+          'O Firebase está temporariamente indisponível. Verifique sua conexão com a internet e tente novamente.';
+
+      } else {
+        mensagem =
+          error?.message ||
+          'Não foi possível excluir o pertence.';
+      }
+
+      setErroExclusao(mensagem);
+
+    } finally {
+      setExcluindo(false);
+    }
+  };
+
+  // ===================================================
+  // AUTENTICAÇÃO E ESTADOS DA PÁGINA
   // ===================================================
 
   if (carregandoAuth) {
@@ -339,15 +375,9 @@ export default function EditarItem() {
     );
   }
 
-  // ===================================================
-  // ACESSO RESTRITO
-  // ===================================================
-
   if (!eAdmin) {
     return (
-      <div
-        className="flex flex-col items-center justify-center min-h-[60vh] text-center p-6 space-y-3 max-w-md mx-auto"
-      >
+      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-6 space-y-3 max-w-md mx-auto">
         <ShieldAlert
           size={56}
           className="text-amber-600"
@@ -358,9 +388,8 @@ export default function EditarItem() {
         </h2>
 
         <p className="text-xs text-gray-500">
-          Esta área é exclusiva para
-          a administração do setor de
-          Achados e Perdidos.
+          Esta área é exclusiva para a administração
+          do setor de Achados e Perdidos.
         </p>
 
         <button
@@ -374,25 +403,15 @@ export default function EditarItem() {
     );
   }
 
-  // ===================================================
-  // CARREGAMENTO
-  // ===================================================
-
   if (loading) {
     return (
-      <PageSkeleton mensagem="Verificando acesso..." />
+      <PageSkeleton mensagem="Carregando informações do item..." />
     );
   }
 
-  // ===================================================
-  // SUCESSO
-  // ===================================================
-
   if (submitted) {
     return (
-      <div
-        className="flex flex-col items-center justify-center min-h-[60vh] text-center p-6 space-y-3"
-      >
+      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-6 space-y-3">
         <CheckCircle2
           size={64}
           className="text-emerald-600"
@@ -410,7 +429,7 @@ export default function EditarItem() {
   }
 
   // ===================================================
-  // FORMULÁRIO
+  // FORMULÁRIO ADMINISTRATIVO
   // ===================================================
 
   return (
@@ -439,7 +458,7 @@ export default function EditarItem() {
         </div>
       </div>
 
-      {/* MENSAGEM DE ERRO */}
+      {/* MENSAGEM DE ERRO GERAL */}
 
       {erro && (
         <div
@@ -457,25 +476,26 @@ export default function EditarItem() {
         className="bg-white p-4 sm:p-6 rounded-2xl border border-gray-100 shadow-sm space-y-4 text-xs md:text-sm"
       >
 
-        {/* STATUS ATUAL — SOMENTE LEITURA */}
+        {/* STATUS ATUAL */}
 
         <div className="space-y-2">
           <span className="font-semibold text-gray-800 block">
             Status atual do pertence
           </span>
 
-          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center gap-2">
+          <div className="edit-item-status-notice p-3 rounded-xl flex items-center gap-3">
             <Info
               size={17}
-              className="text-indigo-700 shrink-0"
+              className="shrink-0"
+              aria-hidden="true"
             />
 
             <div>
-              <p className="font-semibold text-gray-800 capitalize">
+              <p className="font-semibold capitalize">
                 {statusAtual}
               </p>
 
-              <p className="text-[11px] text-gray-500 mt-1">
+              <p className="text-xs mt-1 leading-relaxed">
                 O status é controlado pelas solicitações
                 de retirada e devolução.
               </p>
@@ -678,6 +698,7 @@ export default function EditarItem() {
           type="submit"
           disabled={
             carregandoSalvar ||
+            excluindo ||
             !formData.title.trim() ||
             !formData.category ||
             !formData.location
@@ -689,6 +710,7 @@ export default function EditarItem() {
               <Loader2
                 size={16}
                 className="animate-spin"
+                aria-hidden="true"
               />
 
               <span>
@@ -697,25 +719,74 @@ export default function EditarItem() {
             </>
           ) : (
             <>
-              <Save size={16} />
+              <Save
+                size={16}
+                aria-hidden="true"
+              />
 
-              <span>
-                Salvar Alterações
-              </span>
+              <span>Salvar Alterações</span>
             </>
           )}
         </button>
 
-        {/* AVISO SOBRE EXCLUSÃO */}
+        {/* EXCLUSÃO PERMANENTE */}
 
-        <div className="pt-4 mt-4 border-t border-dashed border-gray-200">
-          <p className="text-[11px] text-gray-500">
-            A exclusão permanente de itens está
-            desativada para proteger o histórico
-            de solicitações e devoluções.
+        <div className="pt-4 mt-4 border-t border-dashed border-gray-200 space-y-3">
+          <p className="text-xs text-gray-500">
+            A exclusão é permitida somente quando o
+            pertence nunca recebeu solicitações.
+            Itens antigos sem histórico verificado
+            ficam protegidos.
           </p>
-        </div>
 
+          <button
+            type="button"
+            onClick={handleExcluir}
+            disabled={
+              excluindo ||
+              carregandoSalvar ||
+              !podeExcluir ||
+              statusAtual !== 'disponível'
+            }
+            className="w-full min-h-12 flex items-center justify-center gap-2 rounded-xl border border-red-300 bg-red-50 px-4 py-3 font-semibold text-red-700 hover:bg-red-100 transition disabled:opacity-50 disabled:cursor-not-allowed dark:bg-[#492d31] dark:text-[#ffd6d6] dark:border-[#a96565] dark:hover:bg-[#5a343a]"
+          >
+            {excluindo ? (
+              <Loader2
+                size={18}
+                className="animate-spin"
+                aria-hidden="true"
+              />
+            ) : (
+              <Trash2
+                size={18}
+                aria-hidden="true"
+              />
+            )}
+
+            {excluindo
+              ? 'Excluindo pertence...'
+              : 'Excluir permanentemente'}
+          </button>
+
+          {/* ERRO EXIBIDO PRÓXIMO AO BOTÃO */}
+
+          {erroExclusao && (
+            <div
+              role="alert"
+              className="flex items-start gap-2 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs dark:bg-[#492d31] dark:border-[#a96565] dark:text-[#ffd6d6]"
+            >
+              <AlertCircle
+                size={18}
+                className="shrink-0 mt-0.5"
+                aria-hidden="true"
+              />
+
+              <p className="leading-relaxed">
+                {erroExclusao}
+              </p>
+            </div>
+          )}
+        </div>
       </form>
     </div>
   );

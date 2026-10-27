@@ -1139,3 +1139,72 @@ html[data-theme="dark"] .profile-info-description {
   outline: 2px solid #dfb49e;
   outline-offset: 3px;
 }
+
+
+/* EDITAR PERTENCE — MENSAGEM DE STATUS */
+
+.edit-item-status-notice {
+  background-color: #fff5f0;
+  border: 1px solid #efd2c0;
+  color: #623529;
+}
+
+.edit-item-status-notice svg {
+  color: #a35d45;
+}
+
+.edit-item-status-notice p {
+  color: inherit;
+}
+
+.dark .edit-item-status-notice {
+  background-color: #263942;
+  border-color: #526b77;
+  color: #d5e8ef;
+}
+
+.dark .edit-item-status-notice svg {
+  color: #dfb49e;
+}
+
+.dark .edit-item-status-notice p {
+  color: #d5e8ef;
+}
+
+.dark .edit-item-status-notice p.font-semibold {
+  color: #ffffff;
+}
+
+
+
+/* ============================================
+   EDITAR ITEM - STATUS ATUAL DO PERTENCE
+   ============================================ */
+
+/* Modo claro */
+.edit-item-status-notice {
+  background-color: #eef2ff;
+  border: 1px solid #c7d2fe;
+  color: #3730a3;
+}
+
+.edit-item-status-notice p {
+  color: inherit;
+}
+
+/* Modo escuro */
+.dark .edit-item-status-notice {
+  background-color: #1e3440;
+  border-color: #426074;
+  color: #e2edf5;
+}
+
+.dark .edit-item-status-notice p {
+  color: #e2edf5;
+}
+
+.dark .edit-item-status-notice svg {
+  color: #9bc4dd;
+}
+
+
