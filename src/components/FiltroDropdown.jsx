@@ -1,93 +1,280 @@
-import { useState, useRef, useEffect, useId } from 'react';
+
+import {
+  useState,
+  useRef,
+  useEffect,
+  useId,
+  useCallback,
+} from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronDown, Check, Search } from 'lucide-react';
 import { normalizar } from '../utils/texto';
 
-// Lista suspensa acessível: funciona com teclado (setas, Enter, Esc), anuncia estado
-// para leitores de tela e tem alvos de toque de pelo menos 44px.
+const ALTURA_MAXIMA = 300;
+const MARGEM = 12;
+
 export default function FiltroDropdown({
   label,
   icone: Icone,
   opcoes = [],
   selecionado,
   onSelect,
-  className = 'w-full sm:w-60',
+  className = 'w-full',
 }) {
   const [aberto, setAberto] = useState(false);
   const [termoBusca, setTermoBusca] = useState('');
   const [indiceAtivo, setIndiceAtivo] = useState(0);
+  const [posicao, setPosicao] = useState(null);
+
   const raizRef = useRef(null);
   const botaoRef = useRef(null);
+  const painelRef = useRef(null);
+  const buscaRef = useRef(null);
+  const opcoesRef = useRef(null);
+
   const listaId = useId();
   const rotuloId = useId();
 
-  const fechar = (devolverFoco = false) => {
-    setAberto(false);
-    setTermoBusca('');
-    if (devolverFoco) botaoRef.current?.focus();
-  };
-
-  // Fecha ao tocar/clicar fora (pointerdown cobre mouse e toque)
-  useEffect(() => {
-    function aoTocarFora(event) {
-      if (raizRef.current && !raizRef.current.contains(event.target)) {
-        setAberto(false);
-        setTermoBusca('');
-      }
-    }
-    document.addEventListener('pointerdown', aoTocarFora);
-    return () => document.removeEventListener('pointerdown', aoTocarFora);
-  }, []);
-
-  // Busca sem diferenciar acentos nem maiúsculas
-  const opcoesFiltradas = opcoes.filter((item) =>
-    normalizar(item.nome || item.label).includes(normalizar(termoBusca))
+  const opcoesFiltradas = opcoes.filter((opcao) =>
+    normalizar(opcao.nome || opcao.label || '').includes(
+      normalizar(termoBusca)
+    )
   );
 
-  const opcaoAtual = opcoes.find((item) => item.id === selecionado) || opcoes[0];
+  const opcaoAtual =
+    opcoes.find((opcao) => opcao.id === selecionado) ||
+    opcoes[0];
+
   const mostrarBusca = opcoes.length > 5;
-  // Só foca o campo de busca com mouse/teclado: no celular isso abriria o teclado por cima da lista.
-  const podeAutoFocar = typeof window !== 'undefined' && window.matchMedia?.('(pointer: fine)').matches;
+
+  const fechar = useCallback((devolverFoco = false) => {
+    setAberto(false);
+    setTermoBusca('');
+    setIndiceAtivo(0);
+    setPosicao(null);
+
+    if (devolverFoco) {
+      botaoRef.current?.focus();
+    }
+  }, []);
+
+  const calcularPosicao = useCallback(() => {
+    const botao = botaoRef.current;
+
+    if (!botao) return null;
+
+    const retangulo = botao.getBoundingClientRect();
+
+    const espacoAbaixo =
+      window.innerHeight - retangulo.bottom - MARGEM;
+
+    const espacoAcima =
+      retangulo.top - MARGEM;
+
+    const abrirAcima =
+      espacoAbaixo < 220 &&
+      espacoAcima > espacoAbaixo;
+
+    const espacoDisponivel = abrirAcima
+      ? espacoAcima
+      : espacoAbaixo;
+
+    const altura = Math.max(
+      100,
+      Math.min(ALTURA_MAXIMA, espacoDisponivel)
+    );
+
+    const largura = Math.min(
+      retangulo.width,
+      window.innerWidth - MARGEM * 2
+    );
+
+    const esquerda = Math.max(
+      MARGEM,
+      Math.min(
+        retangulo.left,
+        window.innerWidth - largura - MARGEM
+      )
+    );
+
+    return {
+      position: 'fixed',
+      left: esquerda,
+      top: abrirAcima
+        ? undefined
+        : retangulo.bottom + 8,
+      bottom: abrirAcima
+        ? window.innerHeight - retangulo.top + 8
+        : undefined,
+      width: largura,
+      maxHeight: altura,
+      zIndex: 9999,
+    };
+  }, []);
+
+  const abrir = () => {
+    const indice = opcoes.findIndex(
+      (opcao) => opcao.id === selecionado
+    );
+
+    setIndiceAtivo(Math.max(indice, 0));
+    setTermoBusca('');
+    setPosicao(calcularPosicao());
+    setAberto(true);
+  };
 
   const escolher = (opcao) => {
     onSelect(opcao.id);
     fechar(true);
   };
 
-  const aoTeclarNaLista = (e) => {
-    if (e.key === 'Escape') {
-      e.preventDefault();
+  // Fecha ao clicar fora, redimensionar ou rolar a página.
+  useEffect(() => {
+    if (!aberto) return;
+
+    function aoClicarFora(evento) {
+      const clicouNoBotao =
+        raizRef.current?.contains(evento.target);
+
+      const clicouNoPainel =
+        painelRef.current?.contains(evento.target);
+
+      if (!clicouNoBotao && !clicouNoPainel) {
+        fechar();
+      }
+    }
+
+    function aoRedimensionar() {
+      fechar();
+    }
+
+    function aoRolar(evento) {
+      if (painelRef.current?.contains(evento.target)) {
+        return;
+      }
+
+      fechar();
+    }
+
+    document.addEventListener('pointerdown', aoClicarFora);
+    window.addEventListener('resize', aoRedimensionar);
+    window.addEventListener('scroll', aoRolar, true);
+
+    return () => {
+      document.removeEventListener(
+        'pointerdown',
+        aoClicarFora
+      );
+
+      window.removeEventListener(
+        'resize',
+        aoRedimensionar
+      );
+
+      window.removeEventListener(
+        'scroll',
+        aoRolar,
+        true
+      );
+    };
+  }, [aberto, fechar]);
+
+  // Foca a busca ao abrir no computador.
+  useEffect(() => {
+    if (!aberto || !mostrarBusca) return;
+
+    const podeFocar =
+      window.matchMedia?.('(pointer: fine)').matches;
+
+    if (podeFocar) {
+      buscaRef.current?.focus();
+    }
+  }, [aberto, mostrarBusca]);
+
+  // Navegação por teclado.
+  const aoTeclar = (evento) => {
+    if (!aberto) {
+      if (
+        evento.key === 'ArrowDown' ||
+        evento.key === 'Enter' ||
+        evento.key === ' '
+      ) {
+        evento.preventDefault();
+        abrir();
+      }
+
+      return;
+    }
+
+    if (evento.key === 'Escape') {
+      evento.preventDefault();
       fechar(true);
-    } else if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      setIndiceAtivo((i) => Math.min(i + 1, opcoesFiltradas.length - 1));
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      setIndiceAtivo((i) => Math.max(i - 1, 0));
-    } else if (e.key === 'Enter' && opcoesFiltradas[indiceAtivo]) {
-      e.preventDefault();
+      return;
+    }
+
+    if (evento.key === 'ArrowDown') {
+      evento.preventDefault();
+
+      const proximo = Math.min(
+        indiceAtivo + 1,
+        Math.max(opcoesFiltradas.length - 1, 0)
+      );
+
+      setIndiceAtivo(proximo);
+
+      opcoesRef.current
+        ?.querySelectorAll('[role="option"]')[proximo]
+        ?.scrollIntoView({ block: 'nearest' });
+
+      return;
+    }
+
+    if (evento.key === 'ArrowUp') {
+      evento.preventDefault();
+
+      const proximo = Math.max(indiceAtivo - 1, 0);
+
+      setIndiceAtivo(proximo);
+
+      opcoesRef.current
+        ?.querySelectorAll('[role="option"]')[proximo]
+        ?.scrollIntoView({ block: 'nearest' });
+
+      return;
+    }
+
+    if (
+      evento.key === 'Enter' &&
+      opcoesFiltradas[indiceAtivo]
+    ) {
+      evento.preventDefault();
       escolher(opcoesFiltradas[indiceAtivo]);
     }
   };
 
-  const abrir = () => {
-    const idx = opcoes.findIndex((o) => o.id === selecionado);
-    setIndiceAtivo(Math.max(idx, 0));
-    setAberto(true);
-  };
-
   return (
     <div
-      className={`relative space-y-1.5 ${className}`}
       ref={raizRef}
-      onKeyDown={aberto ? aoTeclarNaLista : undefined}
+      className={`relative space-y-1.5 ${className}`}
+      onKeyDown={aoTeclar}
     >
-      {/* Rótulo com Ícone */}
-      <span id={rotuloId} className="flex items-center gap-1.5 text-xs font-semibold text-gray-700">
-        {Icone && <Icone size={14} className="text-indigo-900 shrink-0" aria-hidden="true" />}
+      {/* Rótulo */}
+      <span
+        id={rotuloId}
+        className="flex items-center gap-1.5 text-xs font-semibold text-gray-700"
+      >
+        {Icone && (
+          <Icone
+            size={14}
+            className="text-indigo-900 shrink-0"
+            aria-hidden="true"
+          />
+        )}
+
         <span>{label}</span>
       </span>
 
-      {/* Botão de Abertura */}
+      {/* Botão principal */}
       <button
         ref={botaoRef}
         type="button"
@@ -95,74 +282,123 @@ export default function FiltroDropdown({
         aria-expanded={aberto}
         aria-controls={aberto ? listaId : undefined}
         aria-labelledby={`${rotuloId} ${rotuloId}-valor`}
-        onClick={() => (aberto ? fechar() : abrir())}
-        className="w-full min-h-11 flex items-center justify-between bg-white border border-gray-300 rounded-xl px-3.5 py-2.5 text-sm text-gray-800 shadow-xs hover:border-gray-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-700 transition-all cursor-pointer"
+        onClick={() => {
+          if (aberto) {
+            fechar();
+          } else {
+            abrir();
+          }
+        }}
+        className="catalog-dropdown-trigger w-full min-h-12 flex items-center justify-between gap-3 rounded-xl border px-4 py-2.5 text-left text-sm font-semibold shadow-xs transition-all cursor-pointer"
       >
-        <span id={`${rotuloId}-valor`} className="truncate font-medium">
-          {opcaoAtual?.nome || opcaoAtual?.label}
+        <span
+          id={`${rotuloId}-valor`}
+          className="truncate"
+        >
+          {opcaoAtual?.nome ||
+            opcaoAtual?.label ||
+            'Selecione uma opção'}
         </span>
+
         <ChevronDown
-          size={16}
+          size={18}
           aria-hidden="true"
-          className={`text-gray-500 transition-transform duration-200 ${aberto ? 'rotate-180' : ''}`}
+          className={`shrink-0 transition-transform duration-200 ${
+            aberto ? 'rotate-180' : ''
+          }`}
         />
       </button>
 
-      {/* Popover */}
-      {aberto && (
-        <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-2xl shadow-xl p-2 space-y-2 text-sm">
-          {mostrarBusca && (
-            <div className="relative">
-              <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" aria-hidden="true" />
-              <input
-                type="text"
-                aria-label={`Buscar em ${label.toLowerCase()}`}
-                placeholder={`Buscar ${label.toLowerCase()}...`}
-                value={termoBusca}
-                onChange={(e) => {
-                  setTermoBusca(e.target.value);
-                  setIndiceAtivo(0);
-                }}
-                className="w-full pl-8 pr-3 py-2 min-h-10 bg-gray-50 border border-gray-200 rounded-lg outline-none focus:bg-white focus:border-indigo-900 transition-all"
-                autoFocus={podeAutoFocar}
-              />
-            </div>
-          )}
-
+      {/* Menu flutuante com posicionamento adaptativo */}
+      {aberto &&
+        posicao &&
+        createPortal(
           <div
-            id={listaId}
-            role="listbox"
-            aria-labelledby={rotuloId}
-            className="max-h-56 overflow-y-auto space-y-0.5 pr-1"
+            ref={painelRef}
+            style={posicao}
+            className="catalog-dropdown-panel flex flex-col rounded-2xl border p-2 shadow-xl"
+            onKeyDown={aoTeclar}
           >
-            {opcoesFiltradas.length > 0 ? (
-              opcoesFiltradas.map((opcao, i) => {
-                const isSelected = opcao.id === selecionado;
-                const nomeExibicao = opcao.nome || opcao.label;
+            {mostrarBusca && (
+              <div className="relative mb-2 shrink-0">
+                <Search
+                  size={16}
+                  className="catalog-dropdown-search-icon absolute left-3 top-1/2 -translate-y-1/2"
+                  aria-hidden="true"
+                />
 
-                return (
-                  <div
-                    key={opcao.id}
-                    role="option"
-                    aria-selected={isSelected}
-                    tabIndex={-1}
-                    onClick={() => escolher(opcao)}
-                    onMouseEnter={() => setIndiceAtivo(i)}
-                    className={`w-full min-h-11 flex items-center justify-between px-3 py-2 rounded-xl text-left transition-colors cursor-pointer ${
-                      isSelected ? 'bg-indigo-50 text-indigo-900 font-semibold' : 'text-gray-700'
-                    } ${i === indiceAtivo ? 'bg-gray-100' : ''}`}
-                  >
-                    <span className="truncate">{nomeExibicao}</span>
-                    {isSelected && <Check size={16} className="text-indigo-900 shrink-0 ml-2" aria-hidden="true" />}
-                  </div>
-                );
-              })
-            ) : (
-              <div className="p-3 text-center text-gray-600">Nenhum resultado encontrado</div>
+                <input
+                  ref={buscaRef}
+                  type="text"
+                  aria-label={`Buscar em ${label.toLowerCase()}`}
+                  placeholder={`Buscar ${label.toLowerCase()}...`}
+                  value={termoBusca}
+                  onChange={(evento) => {
+                    setTermoBusca(evento.target.value);
+                    setIndiceAtivo(0);
+                  }}
+                  className="catalog-dropdown-search w-full min-h-11 rounded-xl border pl-10 pr-3 text-sm outline-none"
+                />
+              </div>
             )}
-          </div>
-        </div>
-      )}
+
+            {/* Opções */}
+            <div
+              ref={opcoesRef}
+              id={listaId}
+              role="listbox"
+              aria-labelledby={rotuloId}
+              className="catalog-dropdown-scroll min-h-0 flex-1 overflow-y-auto space-y-1 pr-1"
+            >
+              {opcoesFiltradas.length > 0 ? (
+                opcoesFiltradas.map((opcao, indice) => {
+                  const selecionada =
+                    opcao.id === selecionado;
+
+                  const destacada =
+                    indice === indiceAtivo;
+
+                  return (
+                    <button
+                      key={opcao.id}
+                      type="button"
+                      role="option"
+                      aria-selected={selecionada}
+                      onClick={() => escolher(opcao)}
+                      onMouseEnter={() =>
+                        setIndiceAtivo(indice)
+                      }
+                      className={`catalog-dropdown-option w-full min-h-11 flex items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-left text-sm transition-colors cursor-pointer ${
+                        selecionada
+                          ? 'catalog-dropdown-selected font-semibold'
+                          : destacada
+                            ? 'catalog-dropdown-highlighted'
+                            : ''
+                      }`}
+                    >
+                      <span className="truncate">
+                        {opcao.nome || opcao.label}
+                      </span>
+
+                      {selecionada && (
+                        <Check
+                          size={16}
+                          className="shrink-0"
+                          aria-hidden="true"
+                        />
+                      )}
+                    </button>
+                  );
+                })
+              ) : (
+                <p className="px-3 py-4 text-center text-sm">
+                  Nenhum resultado encontrado.
+                </p>
+              )}
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   );
 }
