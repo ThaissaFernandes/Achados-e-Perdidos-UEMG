@@ -273,7 +273,8 @@ service cloud.firestore {
 
         && request.resource.data.keys().hasAll([
           'titulo',
-          'status'
+          'status',
+          'teveSolicitacoes'
         ])
 
         && request.resource.data.titulo is string
@@ -282,6 +283,9 @@ service cloud.firestore {
 
         && request.resource.data.status ==
           'disponível'
+
+        // Todo novo item começa sem histórico.
+        && request.resource.data.teveSolicitacoes == false
 
         && (
           !('solicitacaoAtivaId' in request.resource.data)
@@ -312,8 +316,13 @@ service cloud.firestore {
           && request.resource.data.diff(resource.data)
             .affectedKeys().hasOnly([
               'status',
-              'solicitacaoAtivaId'
+              'solicitacaoAtivaId',
+              'teveSolicitacoes'
             ])
+
+          // Ao receber uma solicitação, fica
+          // permanentemente marcado com histórico.
+          && request.resource.data.teveSolicitacoes == true
 
           // O pedido deve ser criado na mesma
           // transação e pertencer ao solicitante.
@@ -350,7 +359,7 @@ service cloud.firestore {
         return admin()
 
           // Apenas campos cadastrais.
-          // Protege status e solicitação ativa.
+          // Protege status, reserva e histórico.
           && request.resource.data.diff(resource.data)
             .affectedKeys().hasOnly([
               'titulo',
@@ -492,8 +501,19 @@ service cloud.firestore {
         || finalizarReserva()
         || editarDadosItem();
 
-      // Evita apagar registros históricos.
-      allow delete: if false;
+      // Somente administradores podem excluir.
+      // O item não pode ter reserva ou histórico.
+      // Itens antigos sem o campo permanecem protegidos.
+      allow delete: if admin()
+        && resource.data.status == 'disponível'
+        && resource.data.get(
+          'solicitacaoAtivaId',
+          null
+        ) == null
+        && resource.data.get(
+          'teveSolicitacoes',
+          true
+        ) == false;
     }
 
     // ==========================================
@@ -610,7 +630,12 @@ service cloud.firestore {
 
           && getAfter(
             caminhoItem(request.resource.data.itemId)
-          ).data.solicitacaoAtivaId == pedidoId;
+          ).data.solicitacaoAtivaId == pedidoId
+
+          // A transação também marca o histórico.
+          && getAfter(
+            caminhoItem(request.resource.data.itemId)
+          ).data.teveSolicitacoes == true;
       }
 
       allow create: if criarPedido();

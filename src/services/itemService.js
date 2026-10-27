@@ -7,6 +7,9 @@ import {
   getDocs,
   doc,
   updateDoc,
+  getDoc,
+  deleteDoc,
+  limit,
   query,
   where,
   serverTimestamp,
@@ -22,22 +25,12 @@ const itemCollectionRef = collection(db, 'itens');
 // CONFIGURAÇÕES DAS FOTOGRAFIAS
 // =====================================================
 
-// Limite do arquivo escolhido, antes da compressão.
 export const TAMANHO_MAXIMO_FOTO_MB = 10;
-
-// As fotografias continuam armazenadas em Base64
-// dentro dos documentos do Firestore.
-//
-// Não utilizamos Firebase Storage nem Cloud Functions.
 
 const LARGURA_MAXIMA = 900;
 const QUALIDADE_JPEG = 0.72;
-
-// Limite de caracteres do Base64.
-// Deixa espaço para os outros campos do documento.
 const MAX_DATA_URL_CHARS = 600000;
 
-// Campos que podem ser editados pelo administrador.
 const CAMPOS_EDITAVEIS = [
   'titulo',
   'descricao',
@@ -110,7 +103,12 @@ function validarFotoUrl(fotoUrl) {
   return fotoUrl;
 }
 
-function validarTexto(valor, nome, limite, obrigatorio = false) {
+function validarTexto(
+  valor,
+  nome,
+  limite,
+  obrigatorio = false
+) {
   if (typeof valor !== 'string') {
     throw new Error(
       `${nome} deve ser um texto válido.`
@@ -195,7 +193,6 @@ export const uploadFotoItem = async (file) => {
       );
     }
 
-    // Preenche o fundo antes de converter PNG para JPEG.
     ctx.fillStyle = '#ffffff';
 
     ctx.fillRect(
@@ -218,8 +215,6 @@ export const uploadFotoItem = async (file) => {
       QUALIDADE_JPEG
     );
 
-    // Evita aumentar a imagem caso a original
-    // já esteja suficientemente otimizada.
     resultado =
       comprimida.length < original.length
         ? comprimida
@@ -231,8 +226,6 @@ export const uploadFotoItem = async (file) => {
       error
     );
 
-    // Não salva a imagem original sem verificar
-    // o tamanho final.
     resultado = original;
   }
 
@@ -287,17 +280,16 @@ export const cadastrarItem = async (dadosItem) => {
         localEncontrado,
         fotoUrl,
 
-        // Novo item sempre começa disponível.
+        // Novos itens começam disponíveis
+        // e sem histórico de solicitações.
         status: 'disponível',
-
-        // Nenhuma solicitação ativa no cadastro.
+        teveSolicitacoes: false,
         solicitacaoAtivaId: null,
 
         dataCadastro: serverTimestamp(),
 
-        // Mantido por compatibilidade com
-        // os cadastros existentes.
-        criadoPor: dadosItem.criadoPor || 'admin',
+        criadoPor:
+          dadosItem.criadoPor || 'admin',
       }
     );
 
@@ -355,21 +347,11 @@ export const listarItens = async (
 };
 
 // =====================================================
-// ATUALIZAR DADOS DO ITEM
+// ATUALIZAR DADOS CADASTRAIS
 // =====================================================
-//
-// Somente campos cadastrais podem ser editados.
-//
-// Não permitir que esta função altere:
-// - status
-// - solicitacaoAtivaId
-//
-// Esses campos pertencem às transações do
-// solicitacaoService.js.
-//
-// As regras do Firestore também devem verificar
-// a permissão do administrador.
-// =====================================================
+
+// Não altera status, solicitacaoAtivaId
+// nem teveSolicitacoes.
 
 export const atualizarItem = async (
   itemId,
@@ -405,7 +387,6 @@ export const atualizarItem = async (
       );
     }
 
-    // Impede atualização de campos não autorizados.
     const camposInvalidos = camposRecebidos.filter(
       (campo) => !CAMPOS_EDITAVEIS.includes(campo)
     );
@@ -459,16 +440,9 @@ export const atualizarItem = async (
       );
     }
 
-    const itemRef = doc(
-      db,
-      'itens',
-      itemId
-    );
+    const itemRef = doc(db, 'itens', itemId);
 
-    await updateDoc(
-      itemRef,
-      alteracoes
-    );
+    await updateDoc(itemRef, alteracoes);
 
     return true;
 
@@ -485,14 +459,6 @@ export const atualizarItem = async (
 // =====================================================
 // ATUALIZAÇÃO DE STATUS
 // =====================================================
-//
-// O status deve ser alterado somente pelas
-// transações seguras do solicitacaoService.js.
-//
-// Esta função permanece exportada para manter
-// compatibilidade com imports antigos, mas não
-// realiza alterações no Firestore.
-// =====================================================
 
 export const atualizarStatusItem = async () => {
   throw new Error(
@@ -501,19 +467,149 @@ export const atualizarStatusItem = async () => {
 };
 
 // =====================================================
-// EXCLUSÃO DE ITEM
-// =====================================================
-//
-// Não apagar um item que possa fazer parte
-// do histórico de solicitações.
-//
-// A exclusão permanente permanece desativada.
-// Futuramente poderá ser implementado um
-// arquivamento com regras específicas.
+// EXCLUSÃO PERMANENTE COM DIAGNÓSTICO
 // =====================================================
 
-export const excluirItem = async () => {
-  throw new Error(
-    'A exclusão permanente está desativada para preservar o histórico de solicitações.'
+export const excluirItem = async (itemId) => {
+  console.log(
+    '[EXCLUSÃO] Iniciando exclusão do item:',
+    itemId
   );
+
+  if (
+    typeof itemId !== 'string' ||
+    !itemId.trim()
+  ) {
+    throw new Error(
+      'Identificação do pertence inválida.'
+    );
+  }
+
+  const itemRef = doc(db, 'itens', itemId);
+
+  try {
+    // -----------------------------------------------
+    // ETAPA 1 — CONSULTAR ITEM
+    // -----------------------------------------------
+
+    console.log(
+      '[EXCLUSÃO] 1. Buscando documento do item...'
+    );
+
+    const itemSnap = await getDoc(itemRef);
+
+    if (!itemSnap.exists()) {
+      throw new Error(
+        'O pertence não foi encontrado.'
+      );
+    }
+
+    const item = itemSnap.data();
+
+    console.log(
+      '[EXCLUSÃO] Dados do documento:',
+      {
+        status: item.status,
+        solicitacaoAtivaId:
+          item.solicitacaoAtivaId,
+        teveSolicitacoes:
+          item.teveSolicitacoes,
+      }
+    );
+
+    // -----------------------------------------------
+    // ETAPA 2 — VALIDAR DISPONIBILIDADE
+    // -----------------------------------------------
+
+    if (
+      item.status !== 'disponível' ||
+      item.solicitacaoAtivaId != null
+    ) {
+      throw new Error(
+        'Somente itens disponíveis e sem reserva ativa podem ser excluídos.'
+      );
+    }
+
+    console.log(
+      '[EXCLUSÃO] Disponibilidade validada.'
+    );
+
+    // -----------------------------------------------
+    // ETAPA 3 — VALIDAR HISTÓRICO
+    // -----------------------------------------------
+
+    if (item.teveSolicitacoes !== false) {
+      throw new Error(
+        'Este item possui histórico de solicitações ou ainda não teve seu histórico verificado.'
+      );
+    }
+
+    console.log(
+      '[EXCLUSÃO] Campo teveSolicitacoes validado.'
+    );
+
+    // -----------------------------------------------
+    // ETAPA 4 — CONSULTAR SOLICITAÇÕES
+    // -----------------------------------------------
+
+    console.log(
+      '[EXCLUSÃO] 2. Consultando solicitações vinculadas...'
+    );
+
+    const pedidosSnapshot = await getDocs(
+      query(
+        collection(db, 'solicitacoesDevolucao'),
+        where('itemId', '==', itemId),
+        limit(1)
+      )
+    );
+
+    console.log(
+      '[EXCLUSÃO] Consulta concluída.',
+      {
+        possuiSolicitacoes:
+          !pedidosSnapshot.empty,
+        quantidadeRetornada:
+          pedidosSnapshot.size,
+      }
+    );
+
+    if (!pedidosSnapshot.empty) {
+      throw new Error(
+        'Este pertence possui solicitações registradas e não pode ser excluído permanentemente.'
+      );
+    }
+
+    // -----------------------------------------------
+    // ETAPA 5 — EXCLUIR DO FIRESTORE
+    // -----------------------------------------------
+
+    console.log(
+      '[EXCLUSÃO] 3. Executando deleteDoc...'
+    );
+
+    await deleteDoc(itemRef);
+
+    // -----------------------------------------------
+    // ETAPA 6 — CONFIRMAÇÃO
+    // -----------------------------------------------
+
+    console.log(
+      '[EXCLUSÃO] 4. Documento excluído com sucesso.'
+    );
+
+    return true;
+
+  } catch (error) {
+    console.error(
+      '[EXCLUSÃO] Falha durante a operação:',
+      {
+        code: error?.code,
+        message: error?.message,
+        error,
+      }
+    );
+
+    throw error;
+  }
 };

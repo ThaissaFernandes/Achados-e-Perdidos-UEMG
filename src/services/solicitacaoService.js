@@ -14,13 +14,16 @@ import {
 
 import { gerarCodigoRetirada } from '../utils/codigo';
 
-const solicitacoesRef = collection(db, 'solicitacoesDevolucao');
+const solicitacoesRef = collection(
+  db,
+  'solicitacoesDevolucao'
+);
 
 export const STATUS_PENDENTE = 'Pendente';
 
-// --------------------------------------------------
-// ERROS PERSONALIZADOS
-// --------------------------------------------------
+// ===================================================
+// ERRO PERSONALIZADO
+// ===================================================
 
 export class ItemIndisponivelError extends Error {
   constructor() {
@@ -29,11 +32,10 @@ export class ItemIndisponivelError extends Error {
   }
 }
 
-// --------------------------------------------------
+// ===================================================
 // FUNÇÕES AUXILIARES
-// --------------------------------------------------
+// ===================================================
 
-// Verifica se existe um usuário autenticado
 function obterUsuarioAutenticado() {
   const usuario = auth.currentUser;
 
@@ -44,7 +46,6 @@ function obterUsuarioAutenticado() {
   return usuario;
 }
 
-// Normaliza textos de status
 function normalizarStatus(status) {
   return String(status || '')
     .normalize('NFD')
@@ -52,9 +53,9 @@ function normalizarStatus(status) {
     .toLowerCase();
 }
 
-// --------------------------------------------------
+// ===================================================
 // SOLICITAR RETIRADA
-// --------------------------------------------------
+// ===================================================
 
 export async function solicitarRetiradaItem({ itemId }) {
   const usuario = obterUsuarioAutenticado();
@@ -64,18 +65,28 @@ export async function solicitarRetiradaItem({ itemId }) {
   }
 
   const itemRef = doc(db, 'itens', itemId);
-  const usuarioRef = doc(db, 'usuarios', usuario.uid);
+  const usuarioRef = doc(
+    db,
+    'usuarios',
+    usuario.uid
+  );
   const pedidoRef = doc(solicitacoesRef);
 
   const codigo = gerarCodigoRetirada();
 
   await runTransaction(db, async (transaction) => {
-    // Todas as leituras antes das escritas
-    const usuarioSnap = await transaction.get(usuarioRef);
-    const itemSnap = await transaction.get(itemRef);
+    // Todas as leituras antes das escritas.
+    const usuarioSnap = await transaction.get(
+      usuarioRef
+    );
+    const itemSnap = await transaction.get(
+      itemRef
+    );
 
     if (!usuarioSnap.exists()) {
-      throw new Error('Complete seu cadastro primeiro.');
+      throw new Error(
+        'Complete seu cadastro primeiro.'
+      );
     }
 
     if (!itemSnap.exists()) {
@@ -86,10 +97,11 @@ export async function solicitarRetiradaItem({ itemId }) {
     const item = itemSnap.data();
 
     if (!perfil.numeroCadastro) {
-      throw new Error('Matrícula não cadastrada.');
+      throw new Error(
+        'Matrícula não cadastrada.'
+      );
     }
 
-    // O item precisa estar disponível
     if (
       normalizarStatus(item.status || 'disponível') !==
       'disponivel'
@@ -97,13 +109,11 @@ export async function solicitarRetiradaItem({ itemId }) {
       throw new ItemIndisponivelError();
     }
 
-    // Impede reservar um item que já possui
-    // referência a uma solicitação ativa
     if (item.solicitacaoAtivaId != null) {
       throw new ItemIndisponivelError();
     }
 
-    // Cria a solicitação
+    // Cria a solicitação.
     transaction.set(pedidoRef, {
       itemId,
       itemTitulo: item.titulo,
@@ -115,10 +125,12 @@ export async function solicitarRetiradaItem({ itemId }) {
       dataSolicitacao: serverTimestamp(),
     });
 
-    // Reserva o item na mesma transação
+    // Reserva o item e marca o histórico
+    // na MESMA transação.
     transaction.update(itemRef, {
       status: 'em análise',
       solicitacaoAtivaId: pedidoRef.id,
+      teveSolicitacoes: true,
     });
   });
 
@@ -128,11 +140,13 @@ export async function solicitarRetiradaItem({ itemId }) {
   };
 }
 
-// --------------------------------------------------
+// ===================================================
 // LISTAR SOLICITAÇÕES DO USUÁRIO
-// --------------------------------------------------
+// ===================================================
 
-export async function listarMinhasSolicitacoes(usuarioId) {
+export async function listarMinhasSolicitacoes(
+  usuarioId
+) {
   const usuario = obterUsuarioAutenticado();
 
   if (usuarioId !== usuario.uid) {
@@ -152,15 +166,19 @@ export async function listarMinhasSolicitacoes(usuarioId) {
   }));
 }
 
-// --------------------------------------------------
+// ===================================================
 // CANCELAR SOLICITAÇÃO
-// --------------------------------------------------
+// ===================================================
 
-export async function cancelarSolicitacao(solicitacaoId) {
+export async function cancelarSolicitacao(
+  solicitacaoId
+) {
   const usuario = obterUsuarioAutenticado();
 
   if (!solicitacaoId) {
-    throw new Error('Solicitação não informada.');
+    throw new Error(
+      'Solicitação não informada.'
+    );
   }
 
   const pedidoRef = doc(
@@ -170,30 +188,39 @@ export async function cancelarSolicitacao(solicitacaoId) {
   );
 
   await runTransaction(db, async (transaction) => {
-    const pedidoSnap = await transaction.get(pedidoRef);
+    const pedidoSnap = await transaction.get(
+      pedidoRef
+    );
 
     if (!pedidoSnap.exists()) {
-      throw new Error('Solicitação não encontrada.');
+      throw new Error(
+        'Solicitação não encontrada.'
+      );
     }
 
     const pedido = pedidoSnap.data();
 
-    // Somente o solicitante pode cancelar
     if (pedido.usuarioId !== usuario.uid) {
       throw new Error(
         'Você não pode cancelar este pedido.'
       );
     }
 
-    // Apenas pedidos pendentes podem ser cancelados
     if (pedido.status !== STATUS_PENDENTE) {
       throw new Error(
         'Este pedido não pode mais ser cancelado.'
       );
     }
 
-    const itemRef = doc(db, 'itens', pedido.itemId);
-    const itemSnap = await transaction.get(itemRef);
+    const itemRef = doc(
+      db,
+      'itens',
+      pedido.itemId
+    );
+
+    const itemSnap = await transaction.get(
+      itemRef
+    );
 
     if (!itemSnap.exists()) {
       throw new Error(
@@ -203,31 +230,30 @@ export async function cancelarSolicitacao(solicitacaoId) {
 
     const item = itemSnap.data();
 
-    // Verifica se o item está reservado
     if (
-      normalizarStatus(item.status) !== 'em analise'
+      normalizarStatus(item.status) !==
+      'em analise'
     ) {
       throw new Error(
         'O item não está mais reservado.'
       );
     }
 
-    // SEGURANÇA:
-    // A reserva ativa precisa pertencer
-    // exatamente à solicitação cancelada
-    if (item.solicitacaoAtivaId !== solicitacaoId) {
+    if (
+      item.solicitacaoAtivaId !== solicitacaoId
+    ) {
       throw new Error(
         'O item pertence a outra solicitação.'
       );
     }
 
-    // Mantém o histórico da solicitação
     transaction.update(pedidoRef, {
       status: 'Cancelado',
       dataCancelamento: serverTimestamp(),
     });
 
-    // Libera o item novamente
+    // O item volta a ficar disponível,
+    // mas teveSolicitacoes permanece true.
     transaction.update(itemRef, {
       status: 'disponível',
       solicitacaoAtivaId: null,
@@ -235,11 +261,14 @@ export async function cancelarSolicitacao(solicitacaoId) {
   });
 }
 
-// --------------------------------------------------
-// PEDIDOS PENDENTES - ADMINISTRAÇÃO
-// --------------------------------------------------
+// ===================================================
+// PEDIDOS PENDENTES — ADMINISTRAÇÃO
+// ===================================================
 
-export function ouvirPedidosPendentes(onDados, onErro) {
+export function ouvirPedidosPendentes(
+  onDados,
+  onErro
+) {
   const consulta = query(
     solicitacoesRef,
     where('status', '==', STATUS_PENDENTE)
@@ -261,7 +290,9 @@ export function ouvirPedidosPendentes(onDados, onErro) {
 
       const novos = snapshot
         .docChanges()
-        .filter((mudanca) => mudanca.type === 'added')
+        .filter(
+          (mudanca) => mudanca.type === 'added'
+        )
         .map((mudanca) => ({
           id: mudanca.doc.id,
           ...mudanca.doc.data(),
@@ -273,9 +304,9 @@ export function ouvirPedidosPendentes(onDados, onErro) {
   );
 }
 
-// --------------------------------------------------
-// ATENDIMENTO - ADMINISTRAÇÃO
-// --------------------------------------------------
+// ===================================================
+// ATENDIMENTO — ADMINISTRAÇÃO
+// ===================================================
 
 async function atenderSolicitacao(pedido, acao) {
   const usuario = obterUsuarioAutenticado();
@@ -295,42 +326,51 @@ async function atenderSolicitacao(pedido, acao) {
   );
 
   await runTransaction(db, async (transaction) => {
-    const pedidoSnap = await transaction.get(pedidoRef);
+    const pedidoSnap = await transaction.get(
+      pedidoRef
+    );
 
     if (!pedidoSnap.exists()) {
-      throw new Error('Solicitação não encontrada.');
+      throw new Error(
+        'Solicitação não encontrada.'
+      );
     }
 
     const dados = pedidoSnap.data();
 
-    // Somente pedidos pendentes podem ser atendidos
     if (dados.status !== STATUS_PENDENTE) {
       throw new Error(
         'Este pedido já foi atendido.'
       );
     }
 
-    const itemRef = doc(db, 'itens', dados.itemId);
-    const itemSnap = await transaction.get(itemRef);
+    const itemRef = doc(
+      db,
+      'itens',
+      dados.itemId
+    );
+
+    const itemSnap = await transaction.get(
+      itemRef
+    );
 
     if (!itemSnap.exists()) {
-      throw new Error('Item não encontrado.');
+      throw new Error(
+        'Item não encontrado.'
+      );
     }
 
     const item = itemSnap.data();
 
-    // Verifica se o item está em análise
     if (
-      normalizarStatus(item.status) !== 'em analise'
+      normalizarStatus(item.status) !==
+      'em analise'
     ) {
       throw new Error(
         'Estado do item incompatível com o pedido.'
       );
     }
 
-    // SEGURANÇA:
-    // O pedido atendido deve corresponder
-    // à reserva ativa do item
     if (item.solicitacaoAtivaId !== pedido.id) {
       throw new Error(
         'Solicitação não corresponde à reserva ativa.'
@@ -339,33 +379,42 @@ async function atenderSolicitacao(pedido, acao) {
 
     const confirmado = acao === 'confirmar';
 
-    // Atualiza o pedido
     transaction.update(pedidoRef, {
-      status: confirmado ? 'Concluído' : 'Recusado',
+      status: confirmado
+        ? 'Concluído'
+        : 'Recusado',
       dataAtendimento: serverTimestamp(),
       atendidoPor: usuario.uid,
     });
 
-    // Atualiza o status do item
+    // Preserva o valor de teveSolicitacoes.
     transaction.update(itemRef, {
-      status: confirmado ? 'devolvido' : 'disponível',
+      status: confirmado
+        ? 'devolvido'
+        : 'disponível',
       solicitacaoAtivaId: null,
     });
   });
 }
 
-// --------------------------------------------------
+// ===================================================
 // CONFIRMAR DEVOLUÇÃO
-// --------------------------------------------------
+// ===================================================
 
 export async function confirmarDevolucao(pedido) {
-  return atenderSolicitacao(pedido, 'confirmar');
+  return atenderSolicitacao(
+    pedido,
+    'confirmar'
+  );
 }
 
-// --------------------------------------------------
+// ===================================================
 // RECUSAR SOLICITAÇÃO
-// --------------------------------------------------
+// ===================================================
 
 export async function recusarPedido(pedido) {
-  return atenderSolicitacao(pedido, 'recusar');
+  return atenderSolicitacao(
+    pedido,
+    'recusar'
+  );
 }
