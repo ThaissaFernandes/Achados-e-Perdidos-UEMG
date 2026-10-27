@@ -532,13 +532,13 @@ export default function Profile() {
 
                           <CodigoRetirada codigo={sol.codigo} />
 
-                          <div className="bg-indigo-50/50 border border-indigo-100 p-3 rounded-2xl text-xs text-indigo-900 space-y-0.5">
+                         <div className="profile-pickup-notice p-3 rounded-2xl text-xs space-y-0.5">
 
                             <p className="font-semibold">
                               Aguardando conferência presencial.
                             </p>
 
-                            <p className="text-xs text-indigo-800">
+                            <p className="text-xs">
                               No balcão de atendimento, informe{' '}
                               {sol.codigo
                                 ? 'o código acima e '

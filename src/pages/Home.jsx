@@ -291,7 +291,7 @@ export default function Home() {
                 key={titulo}
                 className="bg-white p-4 rounded-2xl border border-gray-100 shadow-xs flex gap-3"
               >
-                <div className="p-2.5 h-fit bg-indigo-50 text-indigo-900 rounded-xl shrink-0">
+                <div className="home-step-icon p-2.5 h-fit bg-indigo-50 text-indigo-900 rounded-xl shrink-0">
                   <Icone
                     size={20}
                     aria-hidden="true"
@@ -311,7 +311,7 @@ export default function Home() {
             ))}
           </ol>
 
-          <p className="text-sm text-gray-700 bg-blue-50/80 border border-blue-100 rounded-2xl p-3.5">
+          <p className="home-found-notice text-sm text-gray-700 bg-blue-50/80 border border-blue-100 rounded-2xl p-3.5">
             <strong>Achou algo?</strong>{' '}
             Entregue o objeto no setor de Achados e
             Perdidos (Administração do Campus). A equipe

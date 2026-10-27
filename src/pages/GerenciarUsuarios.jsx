@@ -26,7 +26,7 @@ import {
 import { db } from '../config/firebase';
 import { useAuth } from '../hooks/useAuth';
 import { useToast } from '../hooks/useToast';
-import { ListSkeleton } from '../components/skeletons';
+import { PageSkeleton } from '../components/skeletons';
 
 // =====================================================
 // FUNÇÕES AUXILIARES
@@ -290,7 +290,7 @@ export default function GerenciarUsuarios() {
   // ===================================================
 
   if (carregandoAuth) {
-    return <ListSkeleton count={3} />;
+    return <PageSkeleton mensagem="Verificando acesso..." />;
   }
 
   // ===================================================
@@ -331,7 +331,7 @@ export default function GerenciarUsuarios() {
   // ===================================================
 
   if (loading && usuarios.length === 0) {
-    return <ListSkeleton count={3} />;
+    return <PageSkeleton mensagem="Verificando acesso..." />;
   }
 
   // ===================================================
@@ -392,7 +392,7 @@ export default function GerenciarUsuarios() {
               type="button"
               onClick={carregarUsuarios}
               disabled={loading}
-              className="min-h-11 px-4 py-2.5 rounded-xl text-xs font-semibold border border-gray-200 text-gray-700 hover:bg-gray-50 flex items-center gap-2 transition disabled:opacity-50"
+              className="admin-users-refresh min-h-11 px-4 py-2.5 rounded-xl text-xs font-semibold border flex items-center gap-2 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <RefreshCw
                 size={16}
@@ -551,7 +551,7 @@ export default function GerenciarUsuarios() {
               return (
                 <div
                   key={usuario.id}
-                  className="p-4 md:p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 hover:bg-gray-50/50 transition"
+                  className="admin-users-row p-4 md:p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 transition-colors"
                 >
                   <div className="flex items-center gap-3 min-w-0">
                     <div className="w-11 h-11 rounded-full bg-indigo-100 text-indigo-900 font-bold flex items-center justify-center shrink-0">

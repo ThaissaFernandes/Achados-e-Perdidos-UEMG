@@ -181,7 +181,7 @@ export default function Pedidos() {
               <div className="flex gap-2 pt-2 border-t border-gray-100 mt-auto text-sm font-semibold">
                 <button
                   onClick={() => setEmConfirmacao({ pedido, acao: 'recusar' })}
-                  className="flex-1 min-h-12 px-3 border border-gray-300 text-gray-800 rounded-xl hover:bg-gray-50 transition flex items-center justify-center gap-1.5"
+                  className="admin-reject-button flex-1 min-h-12 px-3 rounded-xl border font-semibold transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
                 >
                   <XCircle size={16} aria-hidden="true" /> Recusar
                 </button>
@@ -225,7 +225,7 @@ export default function Pedidos() {
           <button
             onClick={fecharConfirmacao}
             disabled={processando}
-            className="flex-1 min-h-12 py-2.5 border border-gray-300 rounded-xl text-gray-800 hover:bg-gray-50 transition disabled:opacity-60"
+            className="admin-modal-back-button flex-1 min-h-12 px-4 py-2.5 rounded-xl border font-semibold transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
           >
             Voltar
           </button>

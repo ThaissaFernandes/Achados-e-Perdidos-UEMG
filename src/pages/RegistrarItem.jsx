@@ -249,48 +249,76 @@ export default function RegistrarItem() {
           </div>
         </fieldset>
 
-        {/* Foto: câmera ou galeria */}
-        <div className="space-y-1.5">
-          <span className="font-semibold text-gray-800 block">Foto do pertence (opcional)</span>
-          {formData.imagePreview ? (
-            <div className="relative rounded-2xl overflow-hidden border border-gray-200 h-44">
-              <img src={formData.imagePreview} alt="Pré-visualização da foto do pertence" className="w-full h-full object-cover" />
-              <button
-                type="button"
-                onClick={handleRemoveImage}
-                aria-label="Remover foto"
-                className="absolute top-2 right-2 p-3 bg-rose-600 text-white rounded-xl shadow-md hover:bg-rose-700 transition cursor-pointer"
-              >
-                <Trash2 size={16} aria-hidden="true" />
-              </button>
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 gap-2">
-              {usarCapturaNativa ? (
-                <label className="min-h-24 border-2 border-dashed border-gray-300 rounded-2xl flex flex-col justify-center items-center gap-1.5 cursor-pointer bg-gray-50/50 hover:bg-gray-50 text-gray-700 focus-within:ring-2 focus-within:ring-indigo-700">
-                  <Camera size={26} aria-hidden="true" />
-                  <span className="font-medium">Tirar foto</span>
-                  <input type="file" accept="image/*" capture="environment" onChange={handleImageChange} className="sr-only" />
-                </label>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setCameraAberta(true)}
-                  className="min-h-24 border-2 border-dashed border-gray-300 rounded-2xl flex flex-col justify-center items-center gap-1.5 cursor-pointer bg-gray-50/50 hover:bg-gray-50 text-gray-700"
-                >
-                  <Camera size={26} aria-hidden="true" />
-                  <span className="font-medium">Tirar foto</span>
-                </button>
-              )}
-              <label className="min-h-24 border-2 border-dashed border-gray-300 rounded-2xl flex flex-col justify-center items-center gap-1.5 cursor-pointer bg-gray-50/50 hover:bg-gray-50 text-gray-700 focus-within:ring-2 focus-within:ring-indigo-700">
-                <ImageIcon size={26} aria-hidden="true" />
-                <span className="font-medium">Escolher da galeria</span>
-                <input type="file" accept="image/*" onChange={handleImageChange} className="sr-only" />
-              </label>
-            </div>
-          )}
-          <p className="text-xs text-gray-600">A foto é reduzida automaticamente para carregar rápido no celular dos alunos.</p>
-        </div>
+        
+{/* Foto: câmera ou galeria */}
+<div className="space-y-1.5">
+  <span className="font-semibold text-gray-800 block">
+    Foto do pertence (opcional)
+  </span>
+
+  {formData.imagePreview ? (
+    <div className="relative rounded-2xl overflow-hidden border border-gray-200 h-44">
+      <img
+        src={formData.imagePreview}
+        alt="Pré-visualização da foto do pertence"
+        className="w-full h-full object-cover"
+      />
+
+      <button
+        type="button"
+        onClick={handleRemoveImage}
+        aria-label="Remover foto"
+        className="absolute top-2 right-2 p-3 bg-rose-600 text-white rounded-xl shadow-md hover:bg-rose-700 transition cursor-pointer"
+      >
+        <Trash2 size={16} aria-hidden="true" />
+      </button>
+    </div>
+  ) : (
+    <div className="grid grid-cols-2 gap-2">
+      {usarCapturaNativa ? (
+        <label className="register-photo-camera min-h-24 border-2 border-dashed rounded-2xl flex flex-col justify-center items-center gap-1.5 cursor-pointer transition-colors focus-within:ring-2 focus-within:ring-indigo-700">
+          <Camera size={26} aria-hidden="true" />
+          <span className="font-medium">Tirar foto</span>
+
+          <input
+            type="file"
+            accept="image/*"
+            capture="environment"
+            onChange={handleImageChange}
+            className="sr-only"
+          />
+        </label>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setCameraAberta(true)}
+          className="register-photo-camera min-h-24 border-2 border-dashed rounded-2xl flex flex-col justify-center items-center gap-1.5 cursor-pointer transition-colors"
+        >
+          <Camera size={26} aria-hidden="true" />
+          <span className="font-medium">Tirar foto</span>
+        </button>
+      )}
+
+      <label className="register-photo-gallery min-h-24 border-2 border-dashed rounded-2xl flex flex-col justify-center items-center gap-1.5 cursor-pointer transition-colors focus-within:ring-2 focus-within:ring-indigo-700">
+        <ImageIcon size={26} aria-hidden="true" />
+        <span className="font-medium">Escolher da galeria</span>
+
+        <input
+          type="file"
+          accept="image/*"
+          onChange={handleImageChange}
+          className="sr-only"
+        />
+      </label>
+    </div>
+  )}
+
+  <p className="text-xs text-gray-600">
+    A foto é reduzida automaticamente para carregar rápido
+    no celular dos alunos.
+  </p>
+</div>
+
 
         {/* Título */}
         <div className="space-y-1.5">
