@@ -1,20 +1,250 @@
+
 <!doctype html>
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
+
+    <!-- Ícone do sistema -->
     <link rel="icon" type="image/png" href="/logo.png" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    
-    <!-- Cor da barra do navegador em dispositivos móveis -->
-    <meta name="theme-color" content="#1e3a8a" />
-    
-    <!-- Descrição do sistema para acessibilidade e busca -->
-    <meta name="description" content="Sistema de Achados e Perdidos da UEMG Divinópolis" />
-    
+
+    <!-- Responsividade -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0"
+    />
+
+    <!-- Cor da barra do navegador -->
+    <meta name="theme-color" content="#101c23" />
+
+    <!-- Descrição -->
+    <meta
+      name="description"
+      content="Sistema de Achados e Perdidos da UEMG Divinópolis"
+    />
+
     <title>Achados e Perdidos UEMG</title>
+
+    <!-- Estilos da tela de carregamento inicial -->
+    <style>
+      html {
+        min-height: 100%;
+        background-color: #101c23;
+      }
+
+      body {
+        min-height: 100vh;
+        min-height: 100dvh;
+        margin: 0;
+        background-color: #101c23;
+      }
+
+      #root {
+        min-height: 100vh;
+        min-height: 100dvh;
+      }
+
+      /* Tela inicial */
+      .app-initial-loader {
+        box-sizing: border-box;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        min-height: 100vh;
+        min-height: 100dvh;
+        padding: 24px;
+        background-color: #101c23;
+        color: #ffffff;
+        font-family:
+          Inter, system-ui, -apple-system,
+          BlinkMacSystemFont, "Segoe UI",
+          sans-serif;
+      }
+
+      /* Conteúdo central */
+      .app-initial-content {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        width: 100%;
+        max-width: 360px;
+        text-align: center;
+      }
+
+      /* Logo */
+      .app-initial-logo {
+        box-sizing: border-box;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 88px;
+        height: 88px;
+        margin-bottom: 25px;
+        padding: 15px;
+        border: 1px solid #40505a;
+        border-radius: 24px;
+        background-color: #21313a;
+        box-shadow:
+          0 10px 35px rgba(0, 0, 0, 0.12);
+      }
+
+      .app-initial-logo img {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+      }
+
+      /* Título */
+      .app-initial-content h1 {
+        margin: 0;
+        color: #ffffff;
+        font-size: clamp(22px, 5vw, 28px);
+        font-weight: 750;
+        line-height: 1.25;
+        letter-spacing: -0.5px;
+      }
+
+      /* Identificação da instituição */
+      .app-initial-subtitle {
+        margin: 10px 0 0;
+        color: #e9b39f;
+        font-size: 13px;
+        font-weight: 500;
+        line-height: 1.5;
+      }
+
+      /* Separador */
+      .app-initial-divider {
+        width: 55px;
+        height: 2px;
+        margin: 28px auto;
+        border-radius: 999px;
+        background-color: #a86e5b;
+        opacity: 0.8;
+      }
+
+      /* Indicador de carregamento */
+      .app-initial-progress {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 11px;
+        color: #b3c2ca;
+        font-size: 13px;
+        line-height: 1.5;
+      }
+
+      /* Animação */
+      .app-initial-spinner {
+        box-sizing: border-box;
+        display: inline-block;
+        width: 19px;
+        height: 19px;
+        flex-shrink: 0;
+        border: 2px solid #40545e;
+        border-top-color: #e9b39f;
+        border-radius: 50%;
+        animation:
+          app-initial-spin 0.85s linear infinite;
+      }
+
+      @keyframes app-initial-spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      /* Rodapé da tela inicial */
+      .app-initial-footer {
+        margin-top: 46px;
+        color: #71858e;
+        font-size: 11px;
+        line-height: 1.5;
+      }
+
+      /* Celulares pequenos */
+      @media (max-width: 380px) {
+        .app-initial-logo {
+          width: 76px;
+          height: 76px;
+          padding: 12px;
+        }
+
+        .app-initial-content h1 {
+          font-size: 21px;
+        }
+      }
+
+      /* Acessibilidade */
+      @media (prefers-reduced-motion: reduce) {
+        .app-initial-spinner {
+          animation: none;
+        }
+      }
+    </style>
   </head>
+
   <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
+    <div id="root">
+      <!--
+        Tela exibida antes da inicialização do React.
+        O React substitui este conteúdo automaticamente
+        quando a aplicação é montada.
+      -->
+
+      <div
+        class="app-initial-loader"
+        role="status"
+        aria-live="polite"
+      >
+        <div class="app-initial-content">
+
+          <!-- Logo UEMG / Sistema -->
+          <div class="app-initial-logo">
+            <img
+              src="/logo.png"
+              alt=""
+              width="58"
+              height="58"
+            />
+          </div>
+
+          <!-- Nome da aplicação -->
+          <h1>Achados e Perdidos</h1>
+
+          <p class="app-initial-subtitle">
+            UEMG • Campus Divinópolis
+          </p>
+
+          <div
+            class="app-initial-divider"
+            aria-hidden="true"
+          ></div>
+
+          <!-- Indicador de carregamento -->
+          <div class="app-initial-progress">
+            <span
+              class="app-initial-spinner"
+              aria-hidden="true"
+            ></span>
+
+            <span>Preparando o sistema...</span>
+          </div>
+
+          <!-- Rodapé -->
+          <p class="app-initial-footer">
+            Universidade do Estado de Minas Gerais
+          </p>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- Inicialização do React -->
+    <script
+      type="module"
+      src="/src/main.jsx"
+    ></script>
   </body>
 </html>
