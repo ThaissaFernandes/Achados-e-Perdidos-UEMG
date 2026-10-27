@@ -6,7 +6,7 @@ import {
   useLocation,
 } from 'react-router-dom';
 
-import { ListSkeleton } from '../components/skeletons';
+import { PageSkeleton } from '../components/skeletons';
 import { useAuth } from '../hooks/useAuth';
 
 /**
@@ -23,7 +23,7 @@ export default function ProtectedRoute({
 
   // 1. Aguarda a verificação da autenticação.
   if (loading) {
-    return <ListSkeleton count={3} />;
+    return <PageSkeleton mensagem="Verificando acesso..." />;
   }
 
   // 2. Usuário não autenticado.

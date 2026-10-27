@@ -18,7 +18,7 @@ import {
   Info,
 } from 'lucide-react';
 
-import { ListSkeleton } from '../components/skeletons';
+import { PageSkeleton } from '../components/skeletons';
 
 import { db } from '../config/firebase';
 
@@ -335,7 +335,7 @@ export default function EditarItem() {
 
   if (carregandoAuth) {
     return (
-      <ListSkeleton count={3} />
+      <PageSkeleton mensagem="Verificando acesso..." />
     );
   }
 
@@ -380,7 +380,7 @@ export default function EditarItem() {
 
   if (loading) {
     return (
-      <ListSkeleton count={3} />
+      <PageSkeleton mensagem="Verificando acesso..." />
     );
   }
 
