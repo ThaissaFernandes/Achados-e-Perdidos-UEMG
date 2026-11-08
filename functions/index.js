@@ -59,3 +59,36 @@ exports.atenderSolicitacao = onCall(options, async (req) => {
   });
   return {ok:true};
 });
+
+// Concede acesso administrativo a uma conta já existente, sem recriá-la.
+exports.promoverUsuarioAdmin = onCall(options, async (req) => {
+  const operadorUid = exigirLogin(req);
+  const usuarioUid = exigirId(req.data?.usuarioUid);
+  if (operadorUid === usuarioUid) {
+    throw new HttpsError('failed-precondition', 'Não é possível alterar a própria conta por esta operação.');
+  }
+  const operadorRef = db.doc(`administradores/${operadorUid}`);
+  const usuarioRef = db.doc(`usuarios/${usuarioUid}`);
+  const adminRef = db.doc(`administradores/${usuarioUid}`);
+  await db.runTransaction(async (tx) => {
+    const [operador, perfil, permissao] = await Promise.all([
+      tx.get(operadorRef), tx.get(usuarioRef), tx.get(adminRef),
+    ]);
+    if (!operador.exists || operador.get('ativo') !== true) {
+      throw new HttpsError('permission-denied', 'Apenas administradores ativos podem conceder acesso.');
+    }
+    if (!perfil.exists) {
+      throw new HttpsError('not-found', 'Usuário não encontrado.');
+    }
+    if (permissao.exists && permissao.get('ativo') === true) {
+      throw new HttpsError('already-exists', 'Esta conta já possui acesso administrativo.');
+    }
+    tx.set(adminRef, {
+      ativo: true,
+      concedidoPor: operadorUid,
+      dataConcessao: FieldValue.serverTimestamp(),
+    }, {merge: true});
+    tx.update(usuarioRef, {tipo: 'admin', eAdmin: true});
+  });
+  return {ok: true};
+});

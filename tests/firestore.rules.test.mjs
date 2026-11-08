@@ -18,11 +18,9 @@ import 'firebase/compat/firestore';
 
 const ambiente = await initializeTestEnvironment({
   projectId: 'demo-achados-seguranca',
-
   firestore: {
     host: '127.0.0.1',
     port: 8080,
-
     rules: readFileSync(
       new URL('../firestore.rules', import.meta.url),
       'utf8'
@@ -85,6 +83,14 @@ async function preparar() {
         ativo: true,
       }),
 
+      db.doc('usuarios/admin-teste').set({
+        nome: 'Administrador Teste',
+        email: 'admin@teste.com',
+        numeroCadastro: '20260003',
+        tipo: 'admin',
+        eAdmin: true,
+      }),
+
       db.doc('usuarios/aluno-teste').set({
         nome: 'Aluno Teste',
         email: 'aluno@teste.com',
@@ -109,8 +115,6 @@ async function preparar() {
         fotoUrl: '',
         status: 'disponível',
         solicitacaoAtivaId: null,
-
-        // Item sem solicitações anteriores.
         teveSolicitacoes: false,
       }),
 
@@ -163,8 +167,6 @@ async function prepararReserva(
         fotoUrl: '',
         status: 'em análise',
         solicitacaoAtivaId: `pedido-${id}`,
-
-        // Um item reservado já teve uma solicitação.
         teveSolicitacoes: true,
       }),
 
@@ -226,8 +228,7 @@ async function criarPedido(
       dataSolicitacao: agora(),
     });
 
-    // Reserva e marcação do histórico
-    // acontecem na mesma transação.
+    // Reserva e histórico na mesma transação.
     tx.update(itemRef, {
       status: 'em análise',
       solicitacaoAtivaId: pedidoId,
@@ -429,12 +430,374 @@ try {
     );
 
     // =================================================
+    // GRUPO 1.1: PROMOÇÃO DE ADMINISTRADORES
+    // =================================================
+
+    await t.test(
+      'Admin promove aluno em batch atômico',
+      async () => {
+        await preparar();
+
+        const batch = admin.batch();
+
+        batch.set(
+          admin.doc('administradores/aluno-teste'),
+          {
+            ativo: true,
+            concedidoPor: 'admin-teste',
+            dataConcessao: agora(),
+          }
+        );
+
+        batch.update(
+          admin.doc('usuarios/aluno-teste'),
+          {
+            tipo: 'admin',
+            eAdmin: true,
+          }
+        );
+
+        await assertSucceeds(batch.commit());
+
+        // O administrador consulta o perfil atualizado.
+        const perfil = await admin
+          .doc('usuarios/aluno-teste')
+          .get();
+
+        assert.equal(perfil.data().tipo, 'admin');
+        assert.equal(perfil.data().eAdmin, true);
+
+        // O usuário promovido consulta sua autorização.
+        const autorizacao = await aluno
+          .doc('administradores/aluno-teste')
+          .get();
+
+        assert.equal(
+          autorizacao.data().ativo,
+          true
+        );
+
+        assert.equal(
+          autorizacao.data().concedidoPor,
+          'admin-teste'
+        );
+      }
+    );
+
+    await t.test(
+      'Aluno não promove outro aluno em batch',
+      async () => {
+        await preparar();
+
+        const batch = aluno.batch();
+
+        batch.set(
+          aluno.doc('administradores/outro-aluno'),
+          {
+            ativo: true,
+            concedidoPor: 'aluno-teste',
+            dataConcessao: agora(),
+          }
+        );
+
+        batch.update(
+          aluno.doc('usuarios/outro-aluno'),
+          {
+            tipo: 'admin',
+            eAdmin: true,
+          }
+        );
+
+        await assertFails(batch.commit());
+      }
+    );
+
+    await t.test(
+      'Admin não cria autorização sem atualizar perfil',
+      async () => {
+        await preparar();
+
+        await assertFails(
+          admin.doc('administradores/aluno-teste').set({
+            ativo: true,
+            concedidoPor: 'admin-teste',
+            dataConcessao: agora(),
+          })
+        );
+      }
+    );
+
+    await t.test(
+      'Admin não altera perfil sem criar autorização',
+      async () => {
+        await preparar();
+
+        await assertFails(
+          admin.doc('usuarios/aluno-teste').update({
+            tipo: 'admin',
+            eAdmin: true,
+          })
+        );
+      }
+    );
+
+    await t.test(
+      'Admin não altera diretamente o próprio tipo de conta',
+      async () => {
+        await preparar();
+
+        await assertFails(
+          admin.doc('usuarios/admin-teste').update({
+            tipo: 'usuario',
+            eAdmin: false,
+          })
+        );
+      }
+    );
+
+    // =================================================
+    // GRUPO 1.2: REVOGAÇÃO E REATIVAÇÃO
+    // =================================================
+
+    await t.test(
+      'Admin revoga permissão em batch',
+      async () => {
+        await preparar();
+
+        const promover = admin.batch();
+
+        promover.set(
+          admin.doc('administradores/aluno-teste'),
+          {
+            ativo: true,
+            concedidoPor: 'admin-teste',
+            dataConcessao: agora(),
+          }
+        );
+
+        promover.update(
+          admin.doc('usuarios/aluno-teste'),
+          {
+            tipo: 'admin',
+            eAdmin: true,
+          }
+        );
+
+        await assertSucceeds(promover.commit());
+
+        const revogar = admin.batch();
+
+        revogar.update(
+          admin.doc('administradores/aluno-teste'),
+          {
+            ativo: false,
+            revogadoPor: 'admin-teste',
+            dataRevogacao: agora(),
+          }
+        );
+
+        revogar.update(
+          admin.doc('usuarios/aluno-teste'),
+          {
+            tipo: 'usuario',
+            eAdmin: false,
+          }
+        );
+
+        await assertSucceeds(revogar.commit());
+
+        const perfil = await aluno
+          .doc('usuarios/aluno-teste')
+          .get();
+
+        const autorizacao = await aluno
+          .doc('administradores/aluno-teste')
+          .get();
+
+        assert.equal(perfil.data().tipo, 'usuario');
+        assert.equal(perfil.data().eAdmin, false);
+        assert.equal(autorizacao.data().ativo, false);
+        assert.equal(
+          autorizacao.data().revogadoPor,
+          'admin-teste'
+        );
+      }
+    );
+
+    await t.test(
+      'Aluno não revoga administrador',
+      async () => {
+        await preparar();
+
+        const batch = aluno.batch();
+
+        batch.update(
+          aluno.doc('administradores/admin-teste'),
+          {
+            ativo: false,
+            revogadoPor: 'aluno-teste',
+            dataRevogacao: agora(),
+          }
+        );
+
+        batch.update(
+          aluno.doc('usuarios/admin-teste'),
+          {
+            tipo: 'usuario',
+            eAdmin: false,
+          }
+        );
+
+        await assertFails(batch.commit());
+      }
+    );
+
+    await t.test(
+      'Admin não revoga a própria permissão',
+      async () => {
+        await preparar();
+
+        const batch = admin.batch();
+
+        batch.update(
+          admin.doc('administradores/admin-teste'),
+          {
+            ativo: false,
+            revogadoPor: 'admin-teste',
+            dataRevogacao: agora(),
+          }
+        );
+
+        batch.update(
+          admin.doc('usuarios/admin-teste'),
+          {
+            tipo: 'usuario',
+            eAdmin: false,
+          }
+        );
+
+        await assertFails(batch.commit());
+      }
+    );
+
+    await t.test(
+      'Admin não desativa autorização isoladamente',
+      async () => {
+        await preparar();
+
+        await assertFails(
+          admin
+            .doc('administradores/admin-teste')
+            .update({
+              ativo: false,
+            })
+        );
+      }
+    );
+
+    await t.test(
+      'Admin não rebaixa perfil isoladamente',
+      async () => {
+        await preparar();
+
+        await assertFails(
+          admin.doc('usuarios/admin-teste').update({
+            tipo: 'usuario',
+            eAdmin: false,
+          })
+        );
+      }
+    );
+
+    await t.test(
+      'Admin pode reativar conta anteriormente revogada',
+      async () => {
+        await preparar();
+
+        const promover = admin.batch();
+
+        promover.set(
+          admin.doc('administradores/aluno-teste'),
+          {
+            ativo: true,
+            concedidoPor: 'admin-teste',
+            dataConcessao: agora(),
+          }
+        );
+
+        promover.update(
+          admin.doc('usuarios/aluno-teste'),
+          {
+            tipo: 'admin',
+            eAdmin: true,
+          }
+        );
+
+        await assertSucceeds(promover.commit());
+
+        const revogar = admin.batch();
+
+        revogar.update(
+          admin.doc('administradores/aluno-teste'),
+          {
+            ativo: false,
+            revogadoPor: 'admin-teste',
+            dataRevogacao: agora(),
+          }
+        );
+
+        revogar.update(
+          admin.doc('usuarios/aluno-teste'),
+          {
+            tipo: 'usuario',
+            eAdmin: false,
+          }
+        );
+
+        await assertSucceeds(revogar.commit());
+
+        const reativar = admin.batch();
+
+        reativar.update(
+          admin.doc('administradores/aluno-teste'),
+          {
+            ativo: true,
+            concedidoPor: 'admin-teste',
+            dataConcessao: agora(),
+            revogadoPor:
+              firebase.firestore.FieldValue.delete(),
+            dataRevogacao:
+              firebase.firestore.FieldValue.delete(),
+          }
+        );
+
+        reativar.update(
+          admin.doc('usuarios/aluno-teste'),
+          {
+            tipo: 'admin',
+            eAdmin: true,
+          }
+        );
+
+        await assertSucceeds(reativar.commit());
+
+        const autorizacao = await aluno
+          .doc('administradores/aluno-teste')
+          .get();
+
+        assert.equal(autorizacao.data().ativo, true);
+      }
+    );
+
+    // =================================================
     // GRUPO 2: TESTES DAS SOLICITAÇÕES
     // =================================================
 
     await t.test(
       'Aluno solicita item e reserva na mesma transação',
       async () => {
+        await preparar();
+
         await assertSucceeds(
           criarPedido(
             aluno,
@@ -586,7 +949,6 @@ try {
           null
         );
 
-        // O histórico deve permanecer marcado.
         assert.equal(
           item.data().teveSolicitacoes,
           true

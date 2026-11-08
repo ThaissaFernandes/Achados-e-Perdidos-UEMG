@@ -50,13 +50,65 @@ service cloud.firestore {
     match /administradores/{uid} {
 
       // Consulta somente da própria autorização.
-      allow get: if dono(uid);
+      allow get: if dono(uid) || admin();
 
       allow list: if false;
 
-      // Atribuição administrativa apenas
-      // por ambiente confiável.
-      allow create, update, delete: if false;
+      // A promoção exige um administrador ativo e a alteração
+      // simultânea do perfil correspondente no mesmo batch.
+      allow create: if admin()
+        && request.auth.uid != uid
+        && exists(caminhoUsuario(uid))
+        && get(caminhoUsuario(uid)).data.get('eAdmin', false) == false
+        && get(caminhoUsuario(uid)).data.get('tipo', 'usuario') == 'usuario'
+        && request.resource.data.keys().hasOnly([
+          'ativo', 'concedidoPor', 'dataConcessao'
+        ])
+        && request.resource.data.keys().hasAll([
+          'ativo', 'concedidoPor', 'dataConcessao'
+        ])
+        && request.resource.data.ativo == true
+        && request.resource.data.concedidoPor == request.auth.uid
+        && request.resource.data.dataConcessao == request.time
+        && getAfter(caminhoUsuario(uid)).data.tipo == 'admin'
+        && getAfter(caminhoUsuario(uid)).data.eAdmin == true;
+
+      // Revogação: desativa autorização e rebaixa perfil no mesmo batch.
+      // Reativação: exige o movimento inverso, também atômico.
+      allow update: if admin()
+        && request.auth.uid != uid
+        && exists(caminhoUsuario(uid))
+        && (
+          (
+            resource.data.ativo == true
+            && request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['ativo', 'revogadoPor', 'dataRevogacao'])
+            && request.resource.data.ativo == false
+            && request.resource.data.revogadoPor == request.auth.uid
+            && request.resource.data.dataRevogacao == request.time
+            && get(caminhoUsuario(uid)).data.tipo == 'admin'
+            && get(caminhoUsuario(uid)).data.eAdmin == true
+            && getAfter(caminhoUsuario(uid)).data.tipo == 'usuario'
+            && getAfter(caminhoUsuario(uid)).data.eAdmin == false
+          )
+          ||
+          (
+            resource.data.ativo == false
+            && request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['ativo', 'concedidoPor', 'dataConcessao', 'revogadoPor', 'dataRevogacao'])
+            && request.resource.data.ativo == true
+            && request.resource.data.concedidoPor == request.auth.uid
+            && request.resource.data.dataConcessao == request.time
+            && !('revogadoPor' in request.resource.data)
+            && !('dataRevogacao' in request.resource.data)
+            && get(caminhoUsuario(uid)).data.tipo == 'usuario'
+            && get(caminhoUsuario(uid)).data.eAdmin == false
+            && getAfter(caminhoUsuario(uid)).data.tipo == 'admin'
+            && getAfter(caminhoUsuario(uid)).data.eAdmin == true
+          )
+        );
+
+      allow delete: if false;
     }
 
     // ==========================================
@@ -181,8 +233,44 @@ service cloud.firestore {
           );
       }
 
+      // A promoção atualiza apenas tipo/eAdmin e exige
+      // a criação da autorização no mesmo batch.
+      function promoverPerfil() {
+        return admin()
+          && request.auth.uid != uid
+          && resource.data.get('tipo', 'usuario') == 'usuario'
+          && resource.data.get('eAdmin', false) == false
+          && request.resource.data.diff(resource.data)
+            .affectedKeys().hasOnly(['tipo', 'eAdmin'])
+          && request.resource.data.tipo == 'admin'
+          && request.resource.data.eAdmin == true
+          && (!exists(/databases/$(database)/documents/administradores/$(uid))
+              || get(/databases/$(database)/documents/administradores/$(uid)).data.ativo == false)
+          && getAfter(/databases/$(database)/documents/administradores/$(uid)).data.ativo == true
+          && getAfter(/databases/$(database)/documents/administradores/$(uid)).data.concedidoPor == request.auth.uid
+          && getAfter(/databases/$(database)/documents/administradores/$(uid)).data.dataConcessao == request.time;
+      }
+
+      function revogarPerfil() {
+        return admin()
+          && request.auth.uid != uid
+          && resource.data.tipo == 'admin'
+          && resource.data.eAdmin == true
+          && request.resource.data.diff(resource.data)
+            .affectedKeys().hasOnly(['tipo', 'eAdmin'])
+          && request.resource.data.tipo == 'usuario'
+          && request.resource.data.eAdmin == false
+          && exists(/databases/$(database)/documents/administradores/$(uid))
+          && get(/databases/$(database)/documents/administradores/$(uid)).data.ativo == true
+          && getAfter(/databases/$(database)/documents/administradores/$(uid)).data.ativo == false
+          && getAfter(/databases/$(database)/documents/administradores/$(uid)).data.revogadoPor == request.auth.uid
+          && getAfter(/databases/$(database)/documents/administradores/$(uid)).data.dataRevogacao == request.time;
+      }
+
       allow update: if editarDadosPessoais()
-        || completarPerfilAntigo();
+        || completarPerfilAntigo()
+        || promoverPerfil()
+        || revogarPerfil();
 
       // Não apagar o perfil diretamente.
       allow delete: if false;

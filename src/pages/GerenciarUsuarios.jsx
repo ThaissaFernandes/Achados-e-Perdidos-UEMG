@@ -7,7 +7,7 @@ import {
 } from 'react';
 
 import { useNavigate } from 'react-router-dom';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, getDocs, getDoc, doc, writeBatch, serverTimestamp, deleteField } from 'firebase/firestore';
 
 import {
   ShieldCheck,
@@ -100,6 +100,9 @@ export default function GerenciarUsuarios() {
   // ===================================================
 
   const [usuarios, setUsuarios] = useState([]);
+  const [usuarioParaPromover, setUsuarioParaPromover] = useState(null);
+  const [usuarioParaRevogar, setUsuarioParaRevogar] = useState(null);
+  const [promovendo, setPromovendo] = useState(false);
   const [busca, setBusca] = useState('');
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState('');
@@ -285,6 +288,79 @@ export default function GerenciarUsuarios() {
   const ehMinhaConta = (usuario) =>
     usuario.id === adminAtual?.uid;
 
+  const confirmarPromocao = async () => {
+    if (!usuarioParaPromover || promovendo || !eAdmin) return;
+    if (usuarioParaPromover.id === adminAtual?.uid) return;
+
+    setPromovendo(true);
+    try {
+      const uid = usuarioParaPromover.id;
+      const batch = writeBatch(db);
+      const autorizacaoRef = doc(db, 'administradores', uid);
+      const autorizacaoAtual = await getDoc(autorizacaoRef);
+      if (autorizacaoAtual.exists()) {
+        if (autorizacaoAtual.data().ativo !== false) {
+          throw new Error('A conta já possui autorização administrativa.');
+        }
+        batch.update(autorizacaoRef, {
+          ativo: true,
+          concedidoPor: adminAtual.uid,
+          dataConcessao: serverTimestamp(),
+          revogadoPor: deleteField(),
+          dataRevogacao: deleteField(),
+        });
+      } else {
+        batch.set(autorizacaoRef, {
+          ativo: true,
+          concedidoPor: adminAtual.uid,
+          dataConcessao: serverTimestamp(),
+        });
+      }
+      batch.update(doc(db, 'usuarios', uid), {
+        tipo: 'admin',
+        eAdmin: true,
+      });
+      await batch.commit();
+      setUsuarioParaPromover(null);
+      await carregarUsuarios();
+      toast?.sucesso?.('Permissão administrativa concedida.');
+    } catch (error) {
+      console.error('Erro ao promover usuário:', error);
+      toast?.erro?.('Não foi possível conceder acesso administrativo.');
+    } finally {
+      setPromovendo(false);
+    }
+  };
+
+  const confirmarRevogacao = async () => {
+    if (!usuarioParaRevogar || promovendo || !eAdmin) return;
+    if (usuarioParaRevogar.id === adminAtual?.uid) return;
+
+    setPromovendo(true);
+    try {
+      const uid = usuarioParaRevogar.id;
+      const batch = writeBatch(db);
+      batch.update(doc(db, 'administradores', uid), {
+        ativo: false,
+        revogadoPor: adminAtual.uid,
+        dataRevogacao: serverTimestamp(),
+      });
+      batch.update(doc(db, 'usuarios', uid), {
+        tipo: 'usuario',
+        eAdmin: false,
+      });
+      await batch.commit();
+      setUsuarioParaRevogar(null);
+      await carregarUsuarios();
+      toast?.sucesso?.('Permissão administrativa removida.');
+    } catch (error) {
+      console.error('Erro ao revogar administrador:', error);
+      toast?.erro?.('Não foi possível remover o acesso administrativo.');
+    } finally {
+      setPromovendo(false);
+    }
+  };
+
   // ===================================================
   // CARREGANDO AUTENTICAÇÃO
   // ===================================================
@@ -421,12 +497,8 @@ export default function GerenciarUsuarios() {
           </h2>
 
           <p className="text-xs text-amber-900 leading-relaxed">
-            A promoção de administradores e a exclusão
-            de contas estão temporariamente desativadas
-            nesta página. Essas operações exigem um
-            procedimento administrativo seguro e não
-            podem ser feitas alterando apenas o perfil
-            do usuário.
+            Somente administradores ativos podem conceder acesso
+            administrativo. A exclusão de contas permanece desativada.
           </p>
         </div>
       </div>
@@ -594,15 +666,30 @@ export default function GerenciarUsuarios() {
                   </div>
 
                   <div className="flex items-center gap-2 shrink-0">
-                    <LockKeyhole
-                      size={16}
-                      className="text-gray-400"
-                      aria-hidden="true"
-                    />
-
-                    <span className="text-[11px] font-medium text-gray-500">
-                      Alterações administrativas protegidas
-                    </span>
+                    {!propriaConta && usuario.tipo !== 'admin' && !usuario.eAdmin ? (
+                      <button
+                        type="button"
+                        disabled={promovendo}
+                        onClick={() => setUsuarioParaPromover(usuario)}
+                        className="min-h-11 px-3 py-2 rounded-xl bg-indigo-900 text-white text-xs font-semibold hover:bg-indigo-800 disabled:opacity-50"
+                      >
+                        Tornar administrador
+                      </button>
+                    ) : propriaConta ? (
+                      <span className="text-xs text-gray-500 flex items-center gap-1">
+                        <ShieldCheck size={16} aria-hidden="true" />
+                        Minha conta
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={promovendo}
+                        onClick={() => setUsuarioParaRevogar(usuario)}
+                        className="min-h-11 px-3 py-2 rounded-xl bg-rose-700 text-white text-xs font-semibold hover:bg-rose-800 disabled:opacity-50"
+                      >
+                        Remover administrador
+                      </button>
+                    )}
                   </div>
                 </div>
               );
@@ -622,6 +709,45 @@ export default function GerenciarUsuarios() {
           )}
         </div>
       </div>
+
+      {/* CONFIRMAÇÃO DE PROMOÇÃO */}
+      {usuarioParaPromover && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+          <div role="dialog" aria-modal="true" aria-labelledby="titulo-promocao" className="bg-white rounded-2xl p-6 max-w-md w-full space-y-4 shadow-xl">
+            <h2 id="titulo-promocao" className="text-lg font-bold text-gray-900">Conceder acesso administrativo?</h2>
+            <p className="text-sm text-gray-700">
+              {obterNome(usuarioParaPromover)} terá acesso às funções administrativas.
+              A conta, matrícula e histórico serão mantidos.
+            </p>
+            <p className="text-xs text-amber-800">Confirme antes que a UEMG autorizou a mudança de função desta pessoa.</p>
+            <div className="flex justify-end gap-3">
+              <button type="button" disabled={promovendo} onClick={() => setUsuarioParaPromover(null)} className="min-h-11 px-4 rounded-xl border text-sm">Cancelar</button>
+              <button type="button" disabled={promovendo} onClick={confirmarPromocao} className="min-h-11 px-4 rounded-xl bg-indigo-900 text-white text-sm disabled:opacity-50">
+                {promovendo ? 'Concedendo...' : 'Confirmar promoção'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CONFIRMAÇÃO DE REVOGAÇÃO */}
+      {usuarioParaRevogar && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+          <div role="dialog" aria-modal="true" aria-labelledby="titulo-revogacao" className="bg-white rounded-2xl p-6 max-w-md w-full space-y-4 shadow-xl">
+            <h2 id="titulo-revogacao" className="text-lg font-bold text-gray-900">Remover acesso administrativo?</h2>
+            <p className="text-sm text-gray-700">
+              {obterNome(usuarioParaRevogar)} voltará a ser usuário comum.
+              A conta, matrícula e histórico serão mantidos.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button type="button" disabled={promovendo} onClick={() => setUsuarioParaRevogar(null)} className="min-h-11 px-4 rounded-xl border text-sm">Cancelar</button>
+              <button type="button" disabled={promovendo} onClick={confirmarRevogacao} className="min-h-11 px-4 rounded-xl bg-rose-700 text-white text-sm disabled:opacity-50">
+                {promovendo ? 'Removendo...' : 'Confirmar remoção'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* MODAL DE VERIFICAÇÃO DE MATRÍCULAS */}
 
