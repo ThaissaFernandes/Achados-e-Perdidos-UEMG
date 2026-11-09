@@ -73,7 +73,7 @@ export default function Cadastro() {
       } else if (err.code === 'auth/network-request-failed') {
         setErro('Sem conexão com a internet. Verifique sua rede e tente novamente.');
       } else if (err.code === 'permission-denied') {
-        setErro('Esta matrícula já está cadastrada. Confira o número informado ou entre em contato com a administração.');
+        setErro('Não foi possível validar a reserva da matrícula. Ela pode estar em uso ou houve uma restrição de acesso. Procure a administração.');
       } else {
         setErro('Não foi possível criar a conta. Confira os dados e tente novamente.');
       }
@@ -104,14 +104,14 @@ export default function Cadastro() {
             <div className="pt-6 space-y-2">
               <h2 className="text-xl font-bold leading-tight">Crie sua Conta Acadêmica</h2>
               <p className="text-sm text-indigo-100 leading-relaxed">
-                Sua matrícula ou registro funcional identifica você no balcão de atendimento e não pode ser usada por mais de uma conta.
+                A matrícula ou registro informado ajuda na identificação durante a retirada e não pode ser associado a mais de uma conta. Não há validação junto à base institucional.
               </p>
             </div>
           </div>
 
           <div className="relative z-10 pt-8 border-t border-indigo-800/80 flex items-center gap-2 text-xs text-indigo-100">
             <Building2 size={16} className="text-indigo-200 shrink-0" aria-hidden="true" />
-            <span>Sistema Acadêmico Integrado — TCC</span>
+            <span>Protótipo acadêmico — TCC</span>
           </div>
 
           <div className="absolute -right-12 -bottom-12 w-48 h-48 bg-white/5 rounded-full pointer-events-none" />
@@ -193,7 +193,7 @@ export default function Cadastro() {
                 {erroMatricula ||
                   (matriculaCurta
                     ? `Faltam ${MIN_DIGITOS_MATRICULA - numeroCadastro.length} número(s) para o mínimo de ${MIN_DIGITOS_MATRICULA}.`
-                    : 'Cada número pode ser usado por uma única conta.')}
+                    : 'O número é informado pelo usuário e verificado apenas quanto ao formato e à duplicidade, sem consulta à base da UEMG.')}
               </p>
             </div>
 

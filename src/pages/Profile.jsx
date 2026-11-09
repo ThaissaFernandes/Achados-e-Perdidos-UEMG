@@ -29,7 +29,7 @@ import {
 import { auth, db } from '../config/firebase';
 import { useAuth } from '../hooks/useAuth';
 import { useToast } from '../hooks/useToast';
-import { cancelarSolicitacao } from '../services/solicitacaoService';
+import { cancelarSolicitacao, obterCodigoRetirada } from '../services/solicitacaoService';
 import CodigoRetirada from '../components/CodigoRetirada';
 
 // =====================================================
@@ -47,9 +47,14 @@ async function buscarSolicitacoesDoUsuario(uid) {
 
   const snapshot = await getDocs(consulta);
 
-  return snapshot.docs.map((documento) => ({
-    id: documento.id,
-    ...documento.data(),
+  return Promise.all(snapshot.docs.map(async (documento) => {
+    const dados = documento.data();
+    let codigo = '';
+    if (dados.status === 'Pendente') {
+      try { codigo = await obterCodigoRetirada(documento.id); }
+      catch (erro) { console.warn('Código indisponível para este pedido:', erro); }
+    }
+    return { id: documento.id, ...dados, codigo };
   }));
 }
 

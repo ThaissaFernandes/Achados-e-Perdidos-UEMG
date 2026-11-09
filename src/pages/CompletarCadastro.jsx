@@ -5,8 +5,8 @@ import { useAuth } from '../hooks/useAuth';
 import { completarCadastro, MatriculaEmUsoError, realizarLogout, MIN_DIGITOS_MATRICULA as MIN_DIGITOS } from '../services/usuarioService';
 import { User, Mail, IdCard, CheckCircle2, AlertCircle, Loader2, LogOut } from 'lucide-react';
 
-// Etapa para quem entrou, mas ainda não tem matrícula ou registro funcional no perfil
-// (por exemplo, contas criadas antes da regra de matrícula única). O número precisa ser único.
+// Completa perfis antigos sem matrícula. Verifica formato e unicidade,
+// mas não autentica a matrícula em uma base institucional da UEMG.
 export default function CompletarCadastro() {
   const { usuario, loading } = useAuth();
   const navigate = useNavigate();
@@ -56,13 +56,11 @@ export default function CompletarCadastro() {
     } catch (err) {
       console.error('Erro ao completar cadastro:', err);
       if (err instanceof MatriculaEmUsoError) {
-        setErro(
-          'Esta matrícula ou registro já está cadastrada em outra conta. Confira o número digitado. Se estiver correto, procure a administração.'
-        );
+        setErro('Esta matrícula ou registro já está associado a outra conta. Confira o número ou procure a administração.');
       } else if (err?.code === 'unavailable' || err?.code === 'network-request-failed') {
         setErro('Sem conexão com a internet. Verifique sua rede e tente novamente.');
       } else if (err?.code === 'permission-denied') {
-        setErro('Sua conta não tem permissão para concluir o cadastro. Procure a administração.');
+        setErro('Não foi possível reservar a matrícula. Ela pode estar em uso ou houve uma restrição de acesso. Procure a administração.');
       } else {
         setErro('Não foi possível concluir o cadastro. Tente novamente.');
       }
@@ -85,7 +83,7 @@ export default function CompletarCadastro() {
         <div>
           <h1 className="text-xl font-bold text-gray-900">Complete seu cadastro</h1>
           <p className="text-sm text-gray-600 mt-1">
-            Falta só uma informação. A administração usa a matrícula ou o registro para conferir a retirada dos pertences.
+            Informe sua matrícula ou registro funcional para apoiar a identificação na retirada dos pertences.
           </p>
         </div>
 
@@ -109,15 +107,7 @@ export default function CompletarCadastro() {
             <label htmlFor="cc-nome" className="block text-gray-800 font-semibold">Nome completo</label>
             <div className="relative">
               <User size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500" aria-hidden="true" />
-              <input
-                id="cc-nome"
-                type="text"
-                required
-                autoComplete="name"
-                value={nomeExibido}
-                onChange={(e) => setNome(e.target.value)}
-                className={classeCampo}
-              />
+              <input id="cc-nome" type="text" required autoComplete="name" value={nomeExibido} onChange={(e) => setNome(e.target.value)} className={classeCampo} />
             </div>
           </div>
 
@@ -125,50 +115,22 @@ export default function CompletarCadastro() {
             <label htmlFor="cc-numero" className="block text-gray-800 font-semibold">Matrícula ou registro funcional</label>
             <div className="relative">
               <IdCard size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500" aria-hidden="true" />
-              <input
-                id="cc-numero"
-                type="text"
-                inputMode="numeric"
-                required
-                autoComplete="off"
-                placeholder="Digite apenas números"
-                value={numero}
-                onChange={(e) => setNumero(e.target.value.replace(/\D/g, ''))}
-                aria-describedby="cc-numero-dica"
-                className={classeCampo}
-              />
+              <input id="cc-numero" type="text" inputMode="numeric" required autoComplete="off" placeholder="Digite apenas números" value={numero} onChange={(e) => setNumero(e.target.value.replace(/\D/g, ''))} aria-describedby="cc-numero-dica cc-privacidade" className={classeCampo} />
             </div>
             <p id="cc-numero-dica" className={`text-xs ${numeroCurto ? 'text-rose-700 font-medium' : 'text-gray-600'}`}>
-              {numeroCurto
-                ? `Faltam ${MIN_DIGITOS - numero.length} número(s) para o mínimo de ${MIN_DIGITOS}.`
-                : 'Cada número pode ser usado por uma única conta. Confira antes de salvar.'}
+              {numeroCurto ? `Faltam ${MIN_DIGITOS - numero.length} número(s) para o mínimo de ${MIN_DIGITOS}.` : 'Cada número pode ser associado a apenas uma conta.'}
+            </p>
+            <p id="cc-privacidade" className="text-xs text-gray-600">
+              O número informado não é validado junto à base institucional da UEMG.
             </p>
           </div>
 
-          <button
-            type="submit"
-            disabled={salvando}
-            className="w-full min-h-12 py-3 bg-indigo-900 text-white rounded-xl font-semibold text-sm hover:bg-indigo-800 transition-all shadow-xs flex items-center justify-center gap-2 disabled:opacity-60 active:scale-[0.98]"
-          >
-            {salvando ? (
-              <>
-                <Loader2 size={16} className="animate-spin" aria-hidden="true" />
-                <span>Salvando...</span>
-              </>
-            ) : (
-              <>
-                <CheckCircle2 size={16} aria-hidden="true" />
-                <span>Concluir cadastro</span>
-              </>
-            )}
+          <button type="submit" disabled={salvando} className="w-full min-h-12 py-3 bg-indigo-900 text-white rounded-xl font-semibold text-sm hover:bg-indigo-800 transition-all shadow-xs flex items-center justify-center gap-2 disabled:opacity-60 active:scale-[0.98]">
+            {salvando ? (<><Loader2 size={16} className="animate-spin" aria-hidden="true" /><span>Salvando...</span></>) : (<><CheckCircle2 size={16} aria-hidden="true" /><span>Concluir cadastro</span></>)}
           </button>
         </form>
 
-        <button
-          type="button"
-          onClick={sair}
-          className="w-full min-h-11 text-sm text-gray-700 hover:text-indigo-900 font-semibold flex items-center justify-center gap-1.5"
-        >
+        <button type="button" onClick={sair} className="w-full min-h-11 text-sm text-gray-700 hover:text-indigo-900 font-semibold flex items-center justify-center gap-1.5">
           <LogOut size={16} aria-hidden="true" /> Entrar com outra conta
         </button>
       </div>

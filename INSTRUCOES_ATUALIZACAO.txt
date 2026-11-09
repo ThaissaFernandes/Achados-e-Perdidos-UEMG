@@ -1,0 +1,13 @@
+Projeto baseado no ZIP enviado em 09/11/2026.
+
+CORRECAO: restaurado tests/firestore.spark.test.mjs, importado por tests/firestore.rules.test.mjs.
+Mantidos todos os demais arquivos de codigo e regras do ZIP enviado.
+Arquivos .env, node_modules, dist, .git e logs foram omitidos por seguranca/tamanho.
+
+Na pasta do projeto:
+  npm install
+  firebase emulators:exec --only firestore "node --test tests/firestore.rules.test.mjs"
+  npm run build
+
+IMPORTANTE: a execucao dos testes e do build nao foi validada neste ambiente.
+Nao publique antes de verificar os resultados.

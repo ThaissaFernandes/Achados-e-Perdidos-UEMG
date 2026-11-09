@@ -218,7 +218,7 @@ export default function ItemDetails() {
         await fetchItem();
       } else {
         setErroSolicitacao(
-          'Não foi possível registrar seu pedido. Verifique sua conexão e tente novamente.'
+          err?.code === 'permission-denied' ? 'A solicitação foi bloqueada pelas regras de segurança. Confira seu cadastro e tente novamente.' : (err?.message || 'Não foi possível registrar seu pedido. Tente novamente.')
         );
       }
     } finally {

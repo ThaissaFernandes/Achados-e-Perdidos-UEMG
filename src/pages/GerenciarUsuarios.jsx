@@ -58,6 +58,22 @@ function normalizarMatricula(numero) {
   return digitos.replace(/^0+/, '') || '0';
 }
 
+// Redução da exposição visual dos identificadores pessoais.
+// Atenção: os dados completos ainda são carregados no navegador do administrador.
+function mascararEmail(email) {
+  const valor = String(email || '').trim();
+  const pos = valor.indexOf('@');
+  if (pos < 0) return 'Não informado';
+  const local = valor.slice(0, pos);
+  return `${local.slice(0, 1)}***${valor.slice(pos)}`;
+}
+
+function mascararMatricula(numero) {
+  const valor = String(numero || '').replace(/\D/g, '');
+  if (!valor) return 'Não informada';
+  return `${'*'.repeat(Math.max(0, valor.length - 4))}${valor.slice(-4)}`;
+}
+
 // Consulta compartilhada pelo carregamento inicial
 // e pelo botão de atualização manual.
 async function buscarUsuariosNoFirestore() {
@@ -446,8 +462,8 @@ export default function GerenciarUsuarios() {
             </div>
 
             <p className="text-xs md:text-sm text-gray-500">
-              Consulte os cadastros e verifique possíveis
-              inconsistências nas matrículas.
+              Consulte os cadastros e identifique possíveis
+              inconsistências nos números informados.
             </p>
           </div>
 
@@ -551,7 +567,7 @@ export default function GerenciarUsuarios() {
           <input
             id="busca-usuarios"
             type="search"
-            placeholder="Buscar por nome, e-mail ou matrícula..."
+            placeholder="Buscar usuários por nome, e-mail ou matrícula..."
             value={busca}
             onChange={(event) =>
               setBusca(event.target.value)
@@ -573,12 +589,12 @@ export default function GerenciarUsuarios() {
                 aria-hidden="true"
               />
 
-              Verificação de matrículas
+              Verificação de inconsistências cadastrais
             </h2>
 
             <p className="text-xs text-gray-500 mt-1">
-              Identifique matrículas ausentes, inválidas
-              ou repetidas entre os perfis.
+              Identifique números ausentes, fora do formato esperado
+              ou repetidos entre os perfis; sem validação institucional.
             </p>
           </div>
 
@@ -589,7 +605,7 @@ export default function GerenciarUsuarios() {
             className="min-h-11 px-4 py-2.5 bg-indigo-900 text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-2 hover:bg-indigo-800 transition disabled:opacity-50"
           >
             <IdCard size={16} aria-hidden="true" />
-            Verificar matrículas
+            Verificar inconsistências
           </button>
         </div>
 
@@ -651,15 +667,13 @@ export default function GerenciarUsuarios() {
                       </div>
 
                       <p className="text-xs text-gray-500 break-all">
-                        {usuario.email ||
-                          'E-mail não informado'}
+                        {mascararEmail(usuario.email)}
                       </p>
 
                       <p className="text-[11px] text-gray-500">
                         Matrícula:{' '}
                         <span className="font-medium text-gray-700">
-                          {obterMatricula(usuario) ||
-                            'Não informada'}
+                          {mascararMatricula(obterMatricula(usuario))}
                         </span>
                       </p>
                     </div>
@@ -769,7 +783,7 @@ export default function GerenciarUsuarios() {
                   id="titulo-verificacao"
                   className="text-base font-bold text-gray-900"
                 >
-                  Verificação de matrículas
+                  Verificação de inconsistências cadastrais
                 </h2>
 
                 <p className="text-xs text-gray-500 mt-1">
@@ -872,7 +886,7 @@ export default function GerenciarUsuarios() {
                       className="rounded-xl bg-rose-50 border border-rose-200 p-3 space-y-2"
                     >
                       <p className="text-xs font-bold text-rose-900">
-                        Número: {conflito.chave}
+                        Número: {mascararMatricula(conflito.chave)}
                       </p>
 
                       {conflito.contas.map((conta) => (
@@ -882,7 +896,7 @@ export default function GerenciarUsuarios() {
                         >
                           {obterNome(conta)}
                           {' — '}
-                          {conta.email || 'Sem e-mail'}
+                          {mascararEmail(conta.email)}
                         </div>
                       ))}
                     </div>
@@ -907,7 +921,7 @@ export default function GerenciarUsuarios() {
                     >
                       {obterNome(conta)}
                       {' — '}
-                      {conta.email || 'Sem e-mail'}
+                      {mascararEmail(conta.email)}
                     </p>
                   )
                 )}
@@ -930,7 +944,7 @@ export default function GerenciarUsuarios() {
                     >
                       {obterNome(conta)}
                       {' — '}
-                      {conta.numeroOriginal}
+                      {mascararMatricula(conta.numeroOriginal)}
                     </p>
                   )
                 )}

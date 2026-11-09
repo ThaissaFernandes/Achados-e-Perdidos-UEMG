@@ -1,420 +1,172 @@
-
 import { auth, db } from '../config/firebase';
-
 import {
-  collection,
-  doc,
-  getDocs,
-  query,
-  where,
-  onSnapshot,
-  runTransaction,
-  serverTimestamp,
+  collection, doc, getDoc, getDocs, query, where, onSnapshot,
+  runTransaction, serverTimestamp,
 } from 'firebase/firestore';
 
-import { gerarCodigoRetirada } from '../utils/codigo';
-
-const solicitacoesRef = collection(
-  db,
-  'solicitacoesDevolucao'
-);
-
+const solicitacoesRef = collection(db, 'solicitacoesDevolucao');
 export const STATUS_PENDENTE = 'Pendente';
-
-// ===================================================
-// ERRO PERSONALIZADO
-// ===================================================
+const ALFABETO = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const FORMATO_CODIGO = /^[A-HJ-NP-Z2-9]{3}-[A-HJ-NP-Z2-9]{3}$/;
 
 export class ItemIndisponivelError extends Error {
-  constructor() {
-    super('ITEM_INDISPONIVEL');
-    this.name = 'ItemIndisponivelError';
+  constructor() { super('ITEM_INDISPONIVEL'); this.name = 'ItemIndisponivelError'; }
+}
+
+function usuarioAutenticado() {
+  if (!auth.currentUser) throw new Error('Faça login para continuar.');
+  return auth.currentUser;
+}
+
+function gerarCodigo() {
+  if (!globalThis.crypto?.getRandomValues) {
+    throw new Error('Seu navegador não suporta geração segura de códigos.');
   }
+  const bytes = new Uint8Array(6);
+  crypto.getRandomValues(bytes);
+  const caracteres = Array.from(bytes, (byte) => ALFABETO[byte & 31]);
+  return `${caracteres.slice(0, 3).join('')}-${caracteres.slice(3).join('')}`;
 }
-
-// ===================================================
-// FUNÇÕES AUXILIARES
-// ===================================================
-
-function obterUsuarioAutenticado() {
-  const usuario = auth.currentUser;
-
-  if (!usuario) {
-    throw new Error('Faça login para continuar.');
-  }
-
-  return usuario;
-}
-
-function normalizarStatus(status) {
-  return String(status || '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase();
-}
-
-// ===================================================
-// SOLICITAR RETIRADA
-// ===================================================
 
 export async function solicitarRetiradaItem({ itemId }) {
-  const usuario = obterUsuarioAutenticado();
-
-  if (!itemId) {
-    throw new Error('Item não informado.');
-  }
-
+  const usuario = usuarioAutenticado();
+  if (!itemId) throw new Error('Item não informado.');
+  const perfilRef = doc(db, 'usuarios', usuario.uid);
   const itemRef = doc(db, 'itens', itemId);
-  const usuarioRef = doc(
-    db,
-    'usuarios',
-    usuario.uid
-  );
   const pedidoRef = doc(solicitacoesRef);
+  const codigoRef = doc(db, 'codigosRetirada', pedidoRef.id);
+  const codigo = gerarCodigo();
 
-  const codigo = gerarCodigoRetirada();
-
-  await runTransaction(db, async (transaction) => {
-    // Todas as leituras antes das escritas.
-    const usuarioSnap = await transaction.get(
-      usuarioRef
-    );
-    const itemSnap = await transaction.get(
-      itemRef
-    );
-
-    if (!usuarioSnap.exists()) {
-      throw new Error(
-        'Complete seu cadastro primeiro.'
-      );
+  await runTransaction(db, async (tx) => {
+    const [perfilSnap, itemSnap] = await Promise.all([
+      tx.get(perfilRef), tx.get(itemRef),
+    ]);
+    if (!perfilSnap.exists()) throw new Error('Complete seu cadastro antes de solicitar.');
+    const perfil = perfilSnap.data();
+    if (!perfil.numeroCadastro || perfil.tipo !== 'usuario' || perfil.eAdmin === true) {
+      throw new Error('Sua conta não pode solicitar retiradas.');
     }
-
-    if (!itemSnap.exists()) {
-      throw new Error('Item não encontrado.');
-    }
-
-    const perfil = usuarioSnap.data();
+    if (!itemSnap.exists()) throw new ItemIndisponivelError();
     const item = itemSnap.data();
-
-    if (!perfil.numeroCadastro) {
-      throw new Error(
-        'Matrícula não cadastrada.'
-      );
-    }
-
-    if (
-      normalizarStatus(item.status || 'disponível') !==
-      'disponivel'
-    ) {
+    if (item.status !== 'disponível' || item.solicitacaoAtivaId != null) {
       throw new ItemIndisponivelError();
     }
-
-    if (item.solicitacaoAtivaId != null) {
-      throw new ItemIndisponivelError();
-    }
-
-    // Cria a solicitação.
-    transaction.set(pedidoRef, {
+    tx.set(pedidoRef, {
       itemId,
       itemTitulo: item.titulo,
       usuarioId: usuario.uid,
       nomeUsuario: perfil.nome,
       numeroCadastro: perfil.numeroCadastro,
-      codigo,
       status: STATUS_PENDENTE,
       dataSolicitacao: serverTimestamp(),
     });
-
-    // Reserva o item e marca o histórico
-    // na MESMA transação.
-    transaction.update(itemRef, {
-      status: 'em análise',
-      solicitacaoAtivaId: pedidoRef.id,
-      teveSolicitacoes: true,
+    tx.set(codigoRef, {
+      codigo, usuarioId: usuario.uid, criadoEm: serverTimestamp(),
+    });
+    tx.update(itemRef, {
+      status: 'em análise', solicitacaoAtivaId: pedidoRef.id, teveSolicitacoes: true,
     });
   });
-
-  return {
-    id: pedidoRef.id,
-    codigo,
-  };
+  return { id: pedidoRef.id, codigo };
 }
 
-// ===================================================
-// LISTAR SOLICITAÇÕES DO USUÁRIO
-// ===================================================
-
-export async function listarMinhasSolicitacoes(
-  usuarioId
-) {
-  const usuario = obterUsuarioAutenticado();
-
-  if (usuarioId !== usuario.uid) {
-    throw new Error('Acesso não autorizado.');
+export async function obterCodigoRetirada(solicitacaoId) {
+  const usuario = usuarioAutenticado();
+  if (!solicitacaoId) throw new Error('Solicitação não informada.');
+  const codigoSnap = await getDoc(doc(db, 'codigosRetirada', solicitacaoId));
+  if (!codigoSnap.exists() || codigoSnap.data().usuarioId !== usuario.uid) {
+    throw new Error('Código não encontrado ou acesso não autorizado.');
   }
-
-  const consulta = query(
-    solicitacoesRef,
-    where('usuarioId', '==', usuario.uid)
-  );
-
-  const snapshot = await getDocs(consulta);
-
-  return snapshot.docs.map((documento) => ({
-    id: documento.id,
-    ...documento.data(),
-  }));
+  return codigoSnap.data().codigo;
 }
 
-// ===================================================
-// CANCELAR SOLICITAÇÃO
-// ===================================================
+export async function listarMinhasSolicitacoes(usuarioId) {
+  const usuario = usuarioAutenticado();
+  if (usuarioId !== usuario.uid) throw new Error('Acesso não autorizado.');
+  const snapshot = await getDocs(query(solicitacoesRef, where('usuarioId', '==', usuario.uid)));
+  return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+}
 
-export async function cancelarSolicitacao(
-  solicitacaoId
-) {
-  const usuario = obterUsuarioAutenticado();
-
-  if (!solicitacaoId) {
-    throw new Error(
-      'Solicitação não informada.'
-    );
-  }
-
-  const pedidoRef = doc(
-    db,
-    'solicitacoesDevolucao',
-    solicitacaoId
-  );
-
-  await runTransaction(db, async (transaction) => {
-    const pedidoSnap = await transaction.get(
-      pedidoRef
-    );
-
-    if (!pedidoSnap.exists()) {
-      throw new Error(
-        'Solicitação não encontrada.'
-      );
-    }
-
+export async function cancelarSolicitacao(solicitacaoId) {
+  const usuario = usuarioAutenticado();
+  if (!solicitacaoId) throw new Error('Solicitação não informada.');
+  const pedidoRef = doc(db, 'solicitacoesDevolucao', solicitacaoId);
+  await runTransaction(db, async (tx) => {
+    const pedidoSnap = await tx.get(pedidoRef);
+    if (!pedidoSnap.exists()) throw new Error('Solicitação não encontrada.');
     const pedido = pedidoSnap.data();
-
-    if (pedido.usuarioId !== usuario.uid) {
-      throw new Error(
-        'Você não pode cancelar este pedido.'
-      );
+    if (pedido.usuarioId !== usuario.uid) throw new Error('Acesso não autorizado.');
+    if (pedido.status !== STATUS_PENDENTE) throw new Error('O pedido não está pendente.');
+    const itemRef = doc(db, 'itens', pedido.itemId);
+    const itemSnap = await tx.get(itemRef);
+    if (!itemSnap.exists() || itemSnap.data().status !== 'em análise' ||
+        itemSnap.data().solicitacaoAtivaId !== solicitacaoId) {
+      throw new Error('O item não está mais reservado para este pedido.');
     }
-
-    if (pedido.status !== STATUS_PENDENTE) {
-      throw new Error(
-        'Este pedido não pode mais ser cancelado.'
-      );
-    }
-
-    const itemRef = doc(
-      db,
-      'itens',
-      pedido.itemId
-    );
-
-    const itemSnap = await transaction.get(
-      itemRef
-    );
-
-    if (!itemSnap.exists()) {
-      throw new Error(
-        'Item vinculado não encontrado.'
-      );
-    }
-
-    const item = itemSnap.data();
-
-    if (
-      normalizarStatus(item.status) !==
-      'em analise'
-    ) {
-      throw new Error(
-        'O item não está mais reservado.'
-      );
-    }
-
-    if (
-      item.solicitacaoAtivaId !== solicitacaoId
-    ) {
-      throw new Error(
-        'O item pertence a outra solicitação.'
-      );
-    }
-
-    transaction.update(pedidoRef, {
-      status: 'Cancelado',
-      dataCancelamento: serverTimestamp(),
-    });
-
-    // O item volta a ficar disponível,
-    // mas teveSolicitacoes permanece true.
-    transaction.update(itemRef, {
-      status: 'disponível',
-      solicitacaoAtivaId: null,
-    });
+    tx.update(pedidoRef, { status: 'Cancelado', dataCancelamento: serverTimestamp() });
+    tx.update(itemRef, { status: 'disponível', solicitacaoAtivaId: null });
   });
 }
 
-// ===================================================
-// PEDIDOS PENDENTES — ADMINISTRAÇÃO
-// ===================================================
-
-export function ouvirPedidosPendentes(
-  onDados,
-  onErro
-) {
-  const consulta = query(
-    solicitacoesRef,
-    where('status', '==', STATUS_PENDENTE)
-  );
-
-  return onSnapshot(
-    consulta,
+export function ouvirPedidosPendentes(onDados, onErro) {
+  return onSnapshot(query(solicitacoesRef, where('status', '==', STATUS_PENDENTE)),
     (snapshot) => {
-      const lista = snapshot.docs
-        .map((documento) => ({
-          id: documento.id,
-          ...documento.data(),
-        }))
-        .sort(
-          (a, b) =>
-            (b.dataSolicitacao?.seconds || 0) -
-            (a.dataSolicitacao?.seconds || 0)
-        );
-
-      const novos = snapshot
-        .docChanges()
-        .filter(
-          (mudanca) => mudanca.type === 'added'
-        )
-        .map((mudanca) => ({
-          id: mudanca.doc.id,
-          ...mudanca.doc.data(),
-        }));
-
+      const lista = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }))
+        .sort((a, b) => (b.dataSolicitacao?.seconds || 0) - (a.dataSolicitacao?.seconds || 0));
+      const novos = snapshot.docChanges().filter((c) => c.type === 'added')
+        .map((c) => ({ id: c.doc.id, ...c.doc.data() }));
       onDados(lista, novos);
-    },
-    onErro
-  );
+    }, onErro);
 }
 
-// ===================================================
-// ATENDIMENTO — ADMINISTRAÇÃO
-// ===================================================
-
-async function atenderSolicitacao(pedido, acao) {
-  const usuario = obterUsuarioAutenticado();
-
-  if (!pedido?.id) {
-    throw new Error('Pedido inválido.');
+async function atenderSolicitacao(pedido, acao, codigo) {
+  const usuario = usuarioAutenticado();
+  if (!pedido?.id) throw new Error('Pedido inválido.');
+  if (!['confirmar', 'recusar'].includes(acao)) throw new Error('Ação inválida.');
+  if (acao === 'confirmar' && !FORMATO_CODIGO.test(codigo || '')) {
+    throw new Error('Informe um código válido no formato ABC-234.');
   }
-
-  if (!['confirmar', 'recusar'].includes(acao)) {
-    throw new Error('Ação inválida.');
+  const adminSnap = await getDoc(doc(db, 'administradores', usuario.uid));
+  if (!adminSnap.exists() || adminSnap.data().ativo !== true) {
+    throw new Error('Acesso administrativo não autorizado.');
   }
-
-  const pedidoRef = doc(
-    db,
-    'solicitacoesDevolucao',
-    pedido.id
-  );
-
-  await runTransaction(db, async (transaction) => {
-    const pedidoSnap = await transaction.get(
-      pedidoRef
-    );
-
-    if (!pedidoSnap.exists()) {
-      throw new Error(
-        'Solicitação não encontrada.'
-      );
+  const pedidoRef = doc(db, 'solicitacoesDevolucao', pedido.id);
+  const conferenciaRef = doc(db, 'conferenciasRetirada', pedido.id);
+  await runTransaction(db, async (tx) => {
+    const pedidoSnap = await tx.get(pedidoRef);
+    if (!pedidoSnap.exists() || pedidoSnap.data().status !== STATUS_PENDENTE) {
+      throw new Error('Pedido não está mais pendente.');
     }
-
-    const dados = pedidoSnap.data();
-
-    if (dados.status !== STATUS_PENDENTE) {
-      throw new Error(
-        'Este pedido já foi atendido.'
-      );
+    const pedidoAtual = pedidoSnap.data();
+    const itemRef = doc(db, 'itens', pedidoAtual.itemId);
+    const itemSnap = await tx.get(itemRef);
+    if (!itemSnap.exists() || itemSnap.data().status !== 'em análise' ||
+        itemSnap.data().solicitacaoAtivaId !== pedido.id) {
+      throw new Error('O item não está reservado para este pedido.');
     }
-
-    const itemRef = doc(
-      db,
-      'itens',
-      dados.itemId
-    );
-
-    const itemSnap = await transaction.get(
-      itemRef
-    );
-
-    if (!itemSnap.exists()) {
-      throw new Error(
-        'Item não encontrado.'
-      );
+    if (acao === 'confirmar') {
+      // Sem leitura do segredo: o Firestore valida o código nas regras.
+      tx.set(conferenciaRef, {
+        codigo, administradorId: usuario.uid, criadoEm: serverTimestamp(),
+      });
     }
-
-    const item = itemSnap.data();
-
-    if (
-      normalizarStatus(item.status) !==
-      'em analise'
-    ) {
-      throw new Error(
-        'Estado do item incompatível com o pedido.'
-      );
-    }
-
-    if (item.solicitacaoAtivaId !== pedido.id) {
-      throw new Error(
-        'Solicitação não corresponde à reserva ativa.'
-      );
-    }
-
-    const confirmado = acao === 'confirmar';
-
-    transaction.update(pedidoRef, {
-      status: confirmado
-        ? 'Concluído'
-        : 'Recusado',
-      dataAtendimento: serverTimestamp(),
+    tx.update(pedidoRef, {
+      status: acao === 'confirmar' ? 'Concluído' : 'Recusado',
       atendidoPor: usuario.uid,
+      dataAtendimento: serverTimestamp(),
     });
-
-    // Preserva o valor de teveSolicitacoes.
-    transaction.update(itemRef, {
-      status: confirmado
-        ? 'devolvido'
-        : 'disponível',
+    tx.update(itemRef, {
+      status: acao === 'confirmar' ? 'devolvido' : 'disponível',
       solicitacaoAtivaId: null,
     });
   });
+  return { id: pedido.id, status: acao === 'confirmar' ? 'Concluído' : 'Recusado' };
 }
 
-// ===================================================
-// CONFIRMAR DEVOLUÇÃO
-// ===================================================
-
-export async function confirmarDevolucao(pedido) {
-  return atenderSolicitacao(
-    pedido,
-    'confirmar'
-  );
+export async function confirmarDevolucao(pedido, codigo) {
+  return atenderSolicitacao(pedido, 'confirmar', String(codigo || '').trim().toUpperCase());
 }
-
-// ===================================================
-// RECUSAR SOLICITAÇÃO
-// ===================================================
 
 export async function recusarPedido(pedido) {
-  return atenderSolicitacao(
-    pedido,
-    'recusar'
-  );
+  return atenderSolicitacao(pedido, 'recusar');
 }

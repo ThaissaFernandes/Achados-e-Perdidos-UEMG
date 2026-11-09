@@ -35,6 +35,19 @@ service cloud.firestore {
       return /databases/$(database)/documents/solicitacoesDevolucao/$(pedidoId);
     }
 
+    function caminhoCodigo(pedidoId) {
+      return /databases/$(database)/documents/codigosRetirada/$(pedidoId);
+    }
+
+    function caminhoConferencia(pedidoId) {
+      return /databases/$(database)/documents/conferenciasRetirada/$(pedidoId);
+    }
+
+    function codigoValido(codigo) {
+      return codigo is string
+        && codigo.matches('^[A-HJ-NP-Z2-9]{3}-[A-HJ-NP-Z2-9]{3}$');
+    }
+
     function caminhoUsuario(uid) {
       return /databases/$(database)/documents/usuarios/$(uid);
     }
@@ -381,65 +394,6 @@ service cloud.firestore {
         );
 
       // --------------------------------------
-      // RESERVAR ITEM
-      // disponível -> em análise
-      // --------------------------------------
-
-      function reservarItem() {
-        return logado()
-
-          && resource.data.status == 'disponível'
-
-          && (
-            !('solicitacaoAtivaId' in resource.data)
-            || resource.data.solicitacaoAtivaId == null
-          )
-
-          && request.resource.data.status ==
-            'em análise'
-
-          && request.resource.data.solicitacaoAtivaId
-            is string
-
-          && request.resource.data.diff(resource.data)
-            .affectedKeys().hasOnly([
-              'status',
-              'solicitacaoAtivaId',
-              'teveSolicitacoes'
-            ])
-
-          // Ao receber uma solicitação, fica
-          // permanentemente marcado com histórico.
-          && request.resource.data.teveSolicitacoes == true
-
-          // O pedido deve ser criado na mesma
-          // transação e pertencer ao solicitante.
-          && getAfter(
-            caminhoPedido(
-              request.resource.data.solicitacaoAtivaId
-            )
-          ).data.itemId == itemId
-
-          && getAfter(
-            caminhoPedido(
-              request.resource.data.solicitacaoAtivaId
-            )
-          ).data.usuarioId == request.auth.uid
-
-          && getAfter(
-            caminhoPedido(
-              request.resource.data.solicitacaoAtivaId
-            )
-          ).data.status == 'Pendente'
-
-          && !exists(
-            caminhoPedido(
-              request.resource.data.solicitacaoAtivaId
-            )
-          );
-      }
-
-      // --------------------------------------
       // EDIÇÃO ADMINISTRATIVA
       // --------------------------------------
 
@@ -484,98 +438,48 @@ service cloud.firestore {
           ).size() <= 600000;
       }
 
-      // --------------------------------------
-      // FINALIZAR RESERVA
-      // em análise -> disponível/devolvido
-      // --------------------------------------
+      // Reserva criada pelo aluno em transação atômica.
+      function reservarItem() {
+        let pedidoId = request.resource.data.solicitacaoAtivaId;
+        return logado() && !admin()
+          && resource.data.status == 'disponível'
+          && resource.data.get('solicitacaoAtivaId', null) == null
+          && pedidoId is string
+          && pedidoId.size() > 0
+          && request.resource.data.status == 'em análise'
+          && request.resource.data.teveSolicitacoes == true
+          && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['status', 'solicitacaoAtivaId', 'teveSolicitacoes'])
+          && !exists(caminhoPedido(pedidoId))
+          && getAfter(caminhoPedido(pedidoId)).data.itemId == itemId
+          && getAfter(caminhoPedido(pedidoId)).data.usuarioId == request.auth.uid
+          && getAfter(caminhoPedido(pedidoId)).data.status == 'Pendente';
+      }
 
+      // Cancelamento do aluno ou atendimento do administrador.
       function finalizarReserva() {
+        let pedidoId = resource.data.solicitacaoAtivaId;
         return logado()
-
           && resource.data.status == 'em análise'
-
-          && resource.data.solicitacaoAtivaId is string
-
-          && request.resource.data.solicitacaoAtivaId ==
-            null
-
-          && request.resource.data.diff(resource.data)
-            .affectedKeys().hasOnly([
-              'status',
-              'solicitacaoAtivaId'
-            ])
-
-          && get(
-            caminhoPedido(
-              resource.data.solicitacaoAtivaId
-            )
-          ).data.status == 'Pendente'
-
-          && get(
-            caminhoPedido(
-              resource.data.solicitacaoAtivaId
-            )
-          ).data.itemId == itemId
-
+          && pedidoId is string
+          && request.resource.data.solicitacaoAtivaId == null
+          && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['status', 'solicitacaoAtivaId'])
+          && get(caminhoPedido(pedidoId)).data.status == 'Pendente'
+          && get(caminhoPedido(pedidoId)).data.itemId == itemId
           && (
-
-            // --------------------------------
-            // CANCELAMENTO PELO ESTUDANTE
-            // --------------------------------
-
             (
-              request.resource.data.status ==
-                'disponível'
-
-              && get(
-                caminhoPedido(
-                  resource.data.solicitacaoAtivaId
-                )
-              ).data.usuarioId == request.auth.uid
-
-              && getAfter(
-                caminhoPedido(
-                  resource.data.solicitacaoAtivaId
-                )
-              ).data.status == 'Cancelado'
-            )
-
-            ||
-
-            // --------------------------------
-            // ATENDIMENTO PELO ADMINISTRADOR
-            // --------------------------------
-
-            (
+              request.resource.data.status == 'disponível'
+              && get(caminhoPedido(pedidoId)).data.usuarioId == request.auth.uid
+              && getAfter(caminhoPedido(pedidoId)).data.status == 'Cancelado'
+            ) || (
               admin()
-
+              && getAfter(caminhoPedido(pedidoId)).data.atendidoPor == request.auth.uid
               && (
-
-                // Confirmação de entrega
-                (
-                  request.resource.data.status ==
-                    'devolvido'
-
-                  && getAfter(
-                    caminhoPedido(
-                      resource.data.solicitacaoAtivaId
-                    )
-                  ).data.status == 'Concluído'
-                )
-
-                ||
-
-                // Recusa da solicitação
-                (
-                  request.resource.data.status ==
-                    'disponível'
-
-                  && getAfter(
-                    caminhoPedido(
-                      resource.data.solicitacaoAtivaId
-                    )
-                  ).data.status == 'Recusado'
-                )
+                (request.resource.data.status == 'devolvido'
+                  && getAfter(caminhoPedido(pedidoId)).data.status == 'Concluído')
+                || (request.resource.data.status == 'disponível'
+                  && getAfter(caminhoPedido(pedidoId)).data.status == 'Recusado')
               )
             )
           );
@@ -640,90 +544,34 @@ service cloud.firestore {
           && resource.data.usuarioId == request.auth.uid
         );
 
-      // --------------------------------------
-      // CRIAR SOLICITAÇÃO
-      // --------------------------------------
-
+      // O aluno cria o pedido junto da reserva e do código.
       function criarPedido() {
-        return logado()
-
-          && !admin()
-
+        let itemId = request.resource.data.itemId;
+        let perfil = get(caminhoUsuario(request.auth.uid)).data;
+        return logado() && !admin()
+          && itemId is string
           && request.resource.data.keys().hasOnly([
-            'itemId',
-            'itemTitulo',
-            'usuarioId',
-            'nomeUsuario',
-            'numeroCadastro',
-            'codigo',
-            'status',
-            'dataSolicitacao'
+            'itemId', 'itemTitulo', 'usuarioId', 'nomeUsuario',
+            'numeroCadastro', 'status', 'dataSolicitacao'
           ])
-
           && request.resource.data.keys().hasAll([
-            'itemId',
-            'itemTitulo',
-            'usuarioId',
-            'nomeUsuario',
-            'numeroCadastro',
-            'codigo',
-            'status',
-            'dataSolicitacao'
+            'itemId', 'itemTitulo', 'usuarioId', 'nomeUsuario',
+            'numeroCadastro', 'status', 'dataSolicitacao'
           ])
-
-          && request.resource.data.usuarioId ==
-            request.auth.uid
-
+          && request.resource.data.usuarioId == request.auth.uid
+          && perfil.get('tipo', 'usuario') == 'usuario'
+          && perfil.get('eAdmin', false) == false
+          && request.resource.data.nomeUsuario == perfil.nome
+          && request.resource.data.numeroCadastro == perfil.numeroCadastro
+          && request.resource.data.itemTitulo == get(caminhoItem(itemId)).data.titulo
           && request.resource.data.status == 'Pendente'
-
-          && request.resource.data.itemId is string
-
-          && request.resource.data.codigo is string
-
-          && request.resource.data.codigo.size() >= 6
-
-          && request.resource.data.dataSolicitacao ==
-            request.time
-
-          // Dados do perfil do próprio solicitante.
-          && exists(
-            caminhoUsuario(request.auth.uid)
-          )
-
-          && request.resource.data.nomeUsuario ==
-            get(
-              caminhoUsuario(request.auth.uid)
-            ).data.nome
-
-          && request.resource.data.numeroCadastro ==
-            get(
-              caminhoUsuario(request.auth.uid)
-            ).data.numeroCadastro
-
-          // Item precisa existir e estar disponível.
-          && request.resource.data.itemTitulo ==
-            get(
-              caminhoItem(request.resource.data.itemId)
-            ).data.titulo
-
-          && get(
-            caminhoItem(request.resource.data.itemId)
-          ).data.status == 'disponível'
-
-          // O item deve ser reservado na
-          // mesma transação do pedido.
-          && getAfter(
-            caminhoItem(request.resource.data.itemId)
-          ).data.status == 'em análise'
-
-          && getAfter(
-            caminhoItem(request.resource.data.itemId)
-          ).data.solicitacaoAtivaId == pedidoId
-
-          // A transação também marca o histórico.
-          && getAfter(
-            caminhoItem(request.resource.data.itemId)
-          ).data.teveSolicitacoes == true;
+          && request.resource.data.dataSolicitacao == request.time
+          && get(caminhoItem(itemId)).data.status == 'disponível'
+          && get(caminhoItem(itemId)).data.get('solicitacaoAtivaId', null) == null
+          && getAfter(caminhoItem(itemId)).data.status == 'em análise'
+          && getAfter(caminhoItem(itemId)).data.solicitacaoAtivaId == pedidoId
+          && getAfter(caminhoCodigo(pedidoId)).data.usuarioId == request.auth.uid
+          && codigoValido(getAfter(caminhoCodigo(pedidoId)).data.codigo);
       }
 
       allow create: if criarPedido();
@@ -770,76 +618,64 @@ service cloud.firestore {
           ).data.solicitacaoAtivaId == null;
       }
 
-      // --------------------------------------
-      // ATENDER SOLICITAÇÃO
-      // --------------------------------------
-
       function atenderPedido() {
+        let itemId = resource.data.itemId;
         return admin()
-
           && resource.data.status == 'Pendente'
-
-          && request.resource.data.status in [
-            'Concluído',
-            'Recusado'
-          ]
-
-          && request.resource.data.atendidoPor ==
-            request.auth.uid
-
-          && request.resource.data.dataAtendimento ==
-            request.time
-
-          && request.resource.data.diff(resource.data)
-            .affectedKeys().hasOnly([
-              'status',
-              'atendidoPor',
-              'dataAtendimento'
-            ])
-
-          // Item vinculado ao pedido.
-          && get(
-            caminhoItem(resource.data.itemId)
-          ).data.status == 'em análise'
-
-          && get(
-            caminhoItem(resource.data.itemId)
-          ).data.solicitacaoAtivaId == pedidoId
-
-          // Reserva encerrada.
-          && getAfter(
-            caminhoItem(resource.data.itemId)
-          ).data.solicitacaoAtivaId == null
-
+          && request.resource.data.status in ['Concluído', 'Recusado']
+          && request.resource.data.atendidoPor == request.auth.uid
+          && request.resource.data.dataAtendimento == request.time
+          && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['status', 'atendidoPor', 'dataAtendimento'])
+          && get(caminhoItem(itemId)).data.status == 'em análise'
+          && get(caminhoItem(itemId)).data.solicitacaoAtivaId == pedidoId
+          && getAfter(caminhoItem(itemId)).data.solicitacaoAtivaId == null
           && (
-
-            // Confirmação de entrega
-            (
-              request.resource.data.status == 'Concluído'
-
-              && getAfter(
-                caminhoItem(resource.data.itemId)
-              ).data.status == 'devolvido'
-            )
-
-            ||
-
-            // Recusa da solicitação
-            (
-              request.resource.data.status == 'Recusado'
-
-              && getAfter(
-                caminhoItem(resource.data.itemId)
-              ).data.status == 'disponível'
-            )
+            (request.resource.data.status == 'Concluído'
+              && getAfter(caminhoItem(itemId)).data.status == 'devolvido'
+              && getAfter(caminhoConferencia(pedidoId)).data.codigo
+                == get(caminhoCodigo(pedidoId)).data.codigo)
+            || (request.resource.data.status == 'Recusado'
+              && getAfter(caminhoItem(itemId)).data.status == 'disponível')
           );
       }
 
-      allow update: if cancelarPedido()
-        || atenderPedido();
-
-      // Não apagar o histórico.
+      allow update: if cancelarPedido() || atenderPedido();
       allow delete: if false;
+    }
+
+    // Código legível somente pelo solicitante. Nunca editável.
+    match /codigosRetirada/{pedidoId} {
+      allow get: if logado() && resource.data.usuarioId == request.auth.uid;
+      allow list: if false;
+      allow create: if logado() && !admin()
+        && request.resource.data.keys().hasOnly(['codigo', 'usuarioId', 'criadoEm'])
+        && request.resource.data.keys().hasAll(['codigo', 'usuarioId', 'criadoEm'])
+        && request.resource.data.usuarioId == request.auth.uid
+        && request.resource.data.criadoEm == request.time
+        && codigoValido(request.resource.data.codigo)
+        && !exists(caminhoPedido(pedidoId))
+        && getAfter(caminhoPedido(pedidoId)).data.usuarioId == request.auth.uid
+        && getAfter(caminhoPedido(pedidoId)).data.status == 'Pendente';
+      allow update, delete: if false;
+    }
+
+    // A administração escreve o código informado pelo aluno sem poder lê-lo.
+    // Uma conferência por pedido, criada somente junto da conclusão.
+    match /conferenciasRetirada/{pedidoId} {
+      allow read: if false;
+      allow create: if admin()
+        && request.resource.data.keys().hasOnly(['codigo', 'administradorId', 'criadoEm'])
+        && request.resource.data.keys().hasAll(['codigo', 'administradorId', 'criadoEm'])
+        && request.resource.data.administradorId == request.auth.uid
+        && request.resource.data.criadoEm == request.time
+        && codigoValido(request.resource.data.codigo)
+        && exists(caminhoPedido(pedidoId))
+        && get(caminhoPedido(pedidoId)).data.status == 'Pendente'
+        && getAfter(caminhoPedido(pedidoId)).data.status == 'Concluído'
+        && getAfter(caminhoPedido(pedidoId)).data.atendidoPor == request.auth.uid
+        && request.resource.data.codigo == get(caminhoCodigo(pedidoId)).data.codigo;
+      allow update, delete: if false;
     }
 
     // ==========================================
