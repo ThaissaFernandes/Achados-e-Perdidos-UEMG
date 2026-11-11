@@ -1,6 +1,5 @@
 // Suíte original preservada (64 casos), com acesso ao próprio código atualizado.
 // Os 11 cenários adicionais de reivindicação estão no arquivo complementar.
-import './firestore.spark.test.mjs';
 
 
 import { readFileSync } from 'node:fs';
@@ -1718,3 +1717,5 @@ try {
 } finally {
   await ambiente.cleanup();
 }
+
+
