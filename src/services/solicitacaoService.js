@@ -145,7 +145,6 @@ async function atenderSolicitacao(pedido, acao, codigo) {
       throw new Error('O item não está reservado para este pedido.');
     }
     if (acao === 'confirmar') {
-      // Sem leitura do segredo: o Firestore valida o código nas regras.
       tx.set(conferenciaRef, {
         codigo, administradorId: usuario.uid, criadoEm: serverTimestamp(),
       });
