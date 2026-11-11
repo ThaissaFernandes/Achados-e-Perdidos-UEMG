@@ -47,10 +47,6 @@ const formatarDataHora = (pedido) => {
   );
 };
 
-const mascararMatricula = (valor) => {
-  const digitos = String(valor || '').replace(/\D/g, '');
-  return digitos ? `${'*'.repeat(Math.max(0, digitos.length - 4))}${digitos.slice(-4)}` : 'Não informada';
-};
 
 const CODIGO_REGEX =
   /^[A-HJ-NP-Z2-9]{3}-[A-HJ-NP-Z2-9]{3}$/;
@@ -325,7 +321,7 @@ export default function Pedidos() {
           </p>
 
           <p className="text-sm text-gray-600">
-            Quando um aluno solicitar a retirada
+            Quando um usuário solicitar a retirada
             de um item, o pedido aparecerá aqui.
           </p>
         </div>
@@ -366,7 +362,7 @@ export default function Pedidos() {
                   </p>
 
                   <p className="text-sm font-bold text-indigo-900 mt-2">
-                    Solicitar ao aluno
+                    Solicitar ao usuário
                   </p>
                 </div>
 
@@ -380,7 +376,7 @@ export default function Pedidos() {
                   </p>
 
                   <p className="text-lg font-black font-mono text-gray-900 break-all">
-                    {mascararMatricula(pedido.numeroCadastro)}
+                    {pedido.numeroCadastro || 'Não informada'}
                   </p>
                 </div>
               </div>
@@ -397,7 +393,7 @@ export default function Pedidos() {
 
                   <span className="truncate">
                     {pedido.nomeUsuario ||
-                      'Aluno'}
+                      'Usuário'}
                   </span>
                 </p>
 
@@ -484,9 +480,9 @@ export default function Pedidos() {
                   {emConfirmacao.pedido.nomeUsuario}
                 </strong>{' '}
                 (
-                {mascararMatricula(emConfirmacao.pedido.numeroCadastro)}
+                {emConfirmacao.pedido.numeroCadastro || 'Não informada'}
                 ) e digite o código apresentado
-                pelo aluno. O item será marcado
+                pelo solicitante. O item será marcado
                 como <strong>devolvido</strong>.
               </p>
             ) : (

@@ -31,6 +31,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useToast } from '../hooks/useToast';
 import { cancelarSolicitacao, obterCodigoRetirada } from '../services/solicitacaoService';
 import CodigoRetirada from '../components/CodigoRetirada';
+import Modal from '../components/Modal';
 
 // =====================================================
 // CONSULTAR SOLICITAÇÕES DO USUÁRIO
@@ -107,6 +108,7 @@ export default function Profile() {
   ] = useState(true);
 
   const [processandoId, setProcessandoId] = useState(null);
+  const [solicitacaoParaCancelar, setSolicitacaoParaCancelar] = useState(null);
 
   const [erro, setErro] = useState(false);
 
@@ -205,16 +207,10 @@ export default function Profile() {
   // CANCELAR SOLICITAÇÃO
   // ===================================================
 
-  const handleCancelarSolicitacao = async (solicitacaoId) => {
-    const confirmou = window.confirm(
-      'Deseja realmente cancelar esta reivindicação? ' +
-      'O item voltará a ficar disponível para outros alunos.'
-    );
+  const handleCancelarSolicitacao = async () => {
+    if (!solicitacaoParaCancelar || processandoId) return;
 
-    if (!confirmou) {
-      return;
-    }
-
+    const solicitacaoId = solicitacaoParaCancelar;
     setProcessandoId(solicitacaoId);
 
     try {
@@ -224,8 +220,10 @@ export default function Profile() {
       // Atualiza a lista após a confirmação do Firestore.
       await carregarSolicitacoes();
 
+      setSolicitacaoParaCancelar(null);
+
       toast.sucesso(
-        'Pedido cancelado. O item voltou a ficar disponível.'
+        'Solicitação cancelada. O pertence voltou a ficar disponível.'
       );
     } catch (error) {
       console.error(
@@ -637,7 +635,7 @@ export default function Profile() {
                         <button
                           type="button"
                           onClick={() =>
-                            handleCancelarSolicitacao(sol.id)
+                            setSolicitacaoParaCancelar(sol.id)
                           }
                           disabled={processandoId === sol.id}
                           className="text-xs font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-50 px-3 py-2.5 min-h-11 rounded-xl transition flex items-center gap-1 disabled:opacity-50 cursor-pointer active:scale-95"
@@ -687,6 +685,39 @@ export default function Profile() {
         </div>
       )}
 
+
+      {/* Confirmação de cancelamento com o mesmo diálogo do sistema */}
+      <Modal
+        aberto={Boolean(solicitacaoParaCancelar)}
+        onFechar={() => setSolicitacaoParaCancelar(null)}
+        titulo="Cancelar solicitação?"
+        descricaoId="descricao-cancelamento-solicitacao"
+        travarFechamento={Boolean(processandoId)}
+      >
+        <p id="descricao-cancelamento-solicitacao" className="text-sm text-gray-700 leading-relaxed">
+          Tem certeza de que deseja cancelar esta solicitação de retirada?
+          O pertence voltará a ficar disponível para outros usuários.
+        </p>
+        <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 pt-2">
+          <button
+            type="button"
+            onClick={() => setSolicitacaoParaCancelar(null)}
+            disabled={Boolean(processandoId)}
+            className="px-4 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50 cursor-pointer"
+          >
+            Voltar
+          </button>
+          <button
+            type="button"
+            onClick={handleCancelarSolicitacao}
+            disabled={Boolean(processandoId)}
+            className="px-4 py-2.5 rounded-xl bg-rose-700 text-white text-sm font-semibold hover:bg-rose-800 disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2"
+          >
+            {processandoId && <Loader2 size={16} className="animate-spin" aria-hidden="true" />}
+            Cancelar solicitação
+          </button>
+        </div>
+      </Modal>
     </div>
   );
 }
