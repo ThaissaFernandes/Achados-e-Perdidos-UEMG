@@ -15,15 +15,11 @@ import {
   serverTimestamp,
 } from 'firebase/firestore';
 
-// =====================================================
 // REFERÊNCIA DA COLEÇÃO
-// =====================================================
 
 const itemCollectionRef = collection(db, 'itens');
 
-// =====================================================
 // CONFIGURAÇÕES DAS FOTOGRAFIAS
-// =====================================================
 
 export const TAMANHO_MAXIMO_FOTO_MB = 10;
 
@@ -39,9 +35,7 @@ const CAMPOS_EDITAVEIS = [
   'fotoUrl',
 ];
 
-// =====================================================
 // FUNÇÕES AUXILIARES
-// =====================================================
 
 const lerComoDataUrl = (file) => {
   return new Promise((resolve, reject) => {
@@ -132,9 +126,7 @@ function validarTexto(
   return texto;
 }
 
-// =====================================================
 // COMPRIMIR FOTOGRAFIA
-// =====================================================
 
 export const uploadFotoItem = async (file) => {
   if (!file) {
@@ -234,9 +226,7 @@ export const uploadFotoItem = async (file) => {
   return resultado;
 };
 
-// =====================================================
 // CADASTRAR ITEM
-// =====================================================
 
 export const cadastrarItem = async (dadosItem) => {
   try {
@@ -280,8 +270,6 @@ export const cadastrarItem = async (dadosItem) => {
         localEncontrado,
         fotoUrl,
 
-        // Novos itens começam disponíveis
-        // e sem histórico de solicitações.
         status: 'disponível',
         teveSolicitacoes: false,
         solicitacaoAtivaId: null,
@@ -308,9 +296,7 @@ export const cadastrarItem = async (dadosItem) => {
 // Alias utilizado pelo RegistrarItem.jsx.
 export const criarItem = cadastrarItem;
 
-// =====================================================
 // LISTAR ITENS
-// =====================================================
 
 export const listarItens = async (
   categoriaId = null
@@ -346,12 +332,9 @@ export const listarItens = async (
   }
 };
 
-// =====================================================
 // ATUALIZAR DADOS CADASTRAIS
-// =====================================================
 
 // Não altera status, solicitacaoAtivaId
-// nem teveSolicitacoes.
 
 export const atualizarItem = async (
   itemId,
@@ -456,9 +439,7 @@ export const atualizarItem = async (
   }
 };
 
-// =====================================================
 // ATUALIZAÇÃO DE STATUS
-// =====================================================
 
 export const atualizarStatusItem = async () => {
   throw new Error(
@@ -466,9 +447,7 @@ export const atualizarStatusItem = async () => {
   );
 };
 
-// =====================================================
 // EXCLUSÃO PERMANENTE COM DIAGNÓSTICO
-// =====================================================
 
 export const excluirItem = async (itemId) => {
   console.log(
@@ -488,9 +467,7 @@ export const excluirItem = async (itemId) => {
   const itemRef = doc(db, 'itens', itemId);
 
   try {
-    // -----------------------------------------------
-    // ETAPA 1 — CONSULTAR ITEM
-    // -----------------------------------------------
+    // ETAPA 1: CONSULTAR ITEM
 
     console.log(
       '[EXCLUSÃO] 1. Buscando documento do item...'
@@ -517,9 +494,7 @@ export const excluirItem = async (itemId) => {
       }
     );
 
-    // -----------------------------------------------
-    // ETAPA 2 — VALIDAR DISPONIBILIDADE
-    // -----------------------------------------------
+    // ETAPA 2: VALIDAR DISPONIBILIDADE
 
     if (
       item.status !== 'disponível' ||
@@ -534,9 +509,7 @@ export const excluirItem = async (itemId) => {
       '[EXCLUSÃO] Disponibilidade validada.'
     );
 
-    // -----------------------------------------------
-    // ETAPA 3 — VALIDAR HISTÓRICO
-    // -----------------------------------------------
+    // ETAPA 3: VALIDAR HISTÓRICO
 
     if (item.teveSolicitacoes !== false) {
       throw new Error(
@@ -548,9 +521,7 @@ export const excluirItem = async (itemId) => {
       '[EXCLUSÃO] Campo teveSolicitacoes validado.'
     );
 
-    // -----------------------------------------------
-    // ETAPA 4 — CONSULTAR SOLICITAÇÕES
-    // -----------------------------------------------
+    // ETAPA 4: CONSULTAR SOLICITAÇÕES
 
     console.log(
       '[EXCLUSÃO] 2. Consultando solicitações vinculadas...'
@@ -580,9 +551,7 @@ export const excluirItem = async (itemId) => {
       );
     }
 
-    // -----------------------------------------------
-    // ETAPA 5 — EXCLUIR DO FIRESTORE
-    // -----------------------------------------------
+    // ETAPA 5: EXCLUIR DO FIRESTORE
 
     console.log(
       '[EXCLUSÃO] 3. Executando deleteDoc...'
@@ -590,9 +559,7 @@ export const excluirItem = async (itemId) => {
 
     await deleteDoc(itemRef);
 
-    // -----------------------------------------------
-    // ETAPA 6 — CONFIRMAÇÃO
-    // -----------------------------------------------
+    // ETAPA 6: CONFIRMAÇÃO
 
     console.log(
       '[EXCLUSÃO] 4. Documento excluído com sucesso.'

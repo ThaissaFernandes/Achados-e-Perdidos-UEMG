@@ -3,7 +3,6 @@ import { ouvirPedidosPendentes } from '../services/solicitacaoService';
 import { useToast } from './useToast';
 
 // Pedidos de retirada pendentes, em tempo real. Só a administração usa (ativo = eAdmin).
-// Com avisarNovos, mostra um aviso na tela quando chega um pedido novo depois do carregamento inicial.
 export function usePedidosPendentes({ ativo = true, avisarNovos = false } = {}) {
   const toast = useToast();
   const [pedidos, setPedidos] = useState([]);

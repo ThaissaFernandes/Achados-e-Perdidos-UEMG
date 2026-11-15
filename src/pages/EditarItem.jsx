@@ -36,9 +36,7 @@ export default function EditarItem() {
 
   const { eAdmin, carregandoAuth } = useAuth();
 
-  // ===================================================
   // ESTADOS
-  // ===================================================
 
   const [categorias, setCategorias] = useState([]);
   const [locais, setLocais] = useState([]);
@@ -63,9 +61,7 @@ export default function EditarItem() {
     fotoUrl: '',
   });
 
-  // ===================================================
   // CARREGAMENTO
-  // ===================================================
 
   useEffect(() => {
     if (carregandoAuth || !eAdmin) {
@@ -126,9 +122,7 @@ export default function EditarItem() {
 
         setStatusAtual(itemData.status || 'disponível');
 
-        // Apenas itens comprovadamente sem histórico
-        // podem ter o botão de exclusão habilitado.
-        setPodeExcluir(
+          setPodeExcluir(
           itemData.teveSolicitacoes === false &&
           itemData.solicitacaoAtivaId == null
         );
@@ -208,9 +202,7 @@ export default function EditarItem() {
     };
   }, [id, eAdmin, carregandoAuth]);
 
-  // ===================================================
   // ATUALIZAR FORMULÁRIO
-  // ===================================================
 
   const atualizarCampo = (campo, valor) => {
     setFormData((dadosAnteriores) => ({
@@ -219,9 +211,7 @@ export default function EditarItem() {
     }));
   };
 
-  // ===================================================
   // SALVAR ALTERAÇÕES
-  // ===================================================
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -294,9 +284,7 @@ export default function EditarItem() {
     }
   };
 
-  // ===================================================
   // EXCLUSÃO PERMANENTE
-  // ===================================================
 
   const handleExcluir = async () => {
     if (
@@ -330,8 +318,6 @@ export default function EditarItem() {
       });
 
     } catch (error) {
-      // Exibe informações detalhadas no console
-      // para identificar em qual etapa ocorreu a falha.
       console.error('Erro ao excluir pertence:', {
         code: error?.code,
         message: error?.message,
@@ -365,9 +351,7 @@ export default function EditarItem() {
     }
   };
 
-  // ===================================================
   // AUTENTICAÇÃO E ESTADOS DA PÁGINA
-  // ===================================================
 
   if (carregandoAuth) {
     return (
@@ -428,9 +412,7 @@ export default function EditarItem() {
     );
   }
 
-  // ===================================================
   // FORMULÁRIO ADMINISTRATIVO
-  // ===================================================
 
   return (
     <div className="space-y-5 pb-20 max-w-2xl mx-auto">

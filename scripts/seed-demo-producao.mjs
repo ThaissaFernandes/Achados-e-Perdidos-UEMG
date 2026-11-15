@@ -52,9 +52,7 @@ import {
   registros,
 } from './demo-data.mjs';
 
-// =====================================================
 // 1. CONFIGURAÇÕES
-// =====================================================
 
 const PROJETO_PERMITIDO = 'achados-e-perdidos-uemg';
 
@@ -79,9 +77,7 @@ const senhaAluno =
 const senhaAdmin =
   process.env.DEMO_TCC_ADMIN_PASSWORD;
 
-// =====================================================
 // 2. FUNÇÕES DE SEGURANÇA
-// =====================================================
 
 function abortar(mensagem) {
   throw new Error(mensagem);
@@ -112,9 +108,7 @@ function idSeguro(id) {
   return id;
 }
 
-// =====================================================
 // 3. VALIDAR ARGUMENTOS
-// =====================================================
 
 garantir(
   dryRun !== aplicar,
@@ -173,9 +167,7 @@ if (aplicar) {
   );
 }
 
-// =====================================================
 // 4. INICIALIZAR FIREBASE ADMIN
-// =====================================================
 
 const credencial = JSON.parse(
   await readFile(
@@ -205,9 +197,7 @@ const app = initializeApp({
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-// =====================================================
 // 5. DATAS FICTÍCIAS
-// =====================================================
 
 function quando(dias) {
   return Timestamp.fromDate(
@@ -215,9 +205,7 @@ function quando(dias) {
   );
 }
 
-// =====================================================
 // 6. GERAR E-MAILS
-// =====================================================
 
 function emailDe(slug, matricula) {
   if (slug === admin[0]) {
@@ -234,9 +222,7 @@ function emailDe(slug, matricula) {
   );
 }
 
-// =====================================================
 // 7. VERIFICAR DOCUMENTOS EXISTENTES
-// =====================================================
 
 async function verificarDocumento(
   colecao,
@@ -288,9 +274,7 @@ async function criarDocumento(
   });
 }
 
-// =====================================================
 // 8. VERIFICAR CONTAS DE DEMONSTRAÇÃO
-// =====================================================
 
 async function consultarConta(
   slug,
@@ -362,9 +346,7 @@ async function consultarConta(
   };
 }
 
-// =====================================================
 // 9. PREPARAR AS SEIS CONTAS
-// =====================================================
 
 const contasPlanejadas = [];
 
@@ -421,9 +403,7 @@ if (contaAdmin.existente) {
   );
 }
 
-// =====================================================
 // 10. PREPARAR CATEGORIAS E LOCAIS
-// =====================================================
 
 const categorias = [
   ...new Set(
@@ -482,9 +462,7 @@ for (const [indice, nome] of locais.entries()) {
   );
 }
 
-// =====================================================
 // 11. PREPARAR OS OBJETOS
-// =====================================================
 
 for (const [
   indice,
@@ -532,9 +510,7 @@ for (const [
   );
 }
 
-// =====================================================
 // 12. VERIFICAR REFERÊNCIAS DOS PEDIDOS
-// =====================================================
 
 for (const registro of registros) {
   garantir(
@@ -552,9 +528,7 @@ for (const registro of registros) {
   );
 }
 
-// =====================================================
 // 13. PRÉ-VERIFICAR DOCUMENTOS
-// =====================================================
 
 console.log(
   `\nProjeto Firebase: ${PROJETO_PERMITIDO}`
@@ -608,9 +582,7 @@ for (const registro of registros) {
   });
 }
 
-// =====================================================
 // 14. EXIBIR RELATÓRIO
-// =====================================================
 
 console.log('\nCONTAS DE DEMONSTRAÇÃO');
 
@@ -665,9 +637,7 @@ console.log(
   `Documentos novos: ${totalDocumentos - documentosExistentes}`
 );
 
-// =====================================================
 // 15. ENCERRAR DRY-RUN
-// =====================================================
 
 if (dryRun) {
   console.log(
@@ -685,9 +655,7 @@ if (dryRun) {
   process.exit(0);
 }
 
-// =====================================================
 // 16. CRIAR CONTAS NO AUTHENTICATION
-// =====================================================
 
 console.log(
   '\nConfirmações recebidas. Iniciando cadastro real...'
@@ -762,9 +730,7 @@ for (const conta of contasPlanejadas) {
   );
 }
 
-// =====================================================
 // 17. CONFIGURAR ADMINISTRADOR
-// =====================================================
 
 const administrador = usuariosCriados.get(
   admin[0]
@@ -795,9 +761,7 @@ if (!adminSnapshot.exists) {
   );
 }
 
-// =====================================================
 // 18. CADASTRAR CATEGORIAS, LOCAIS E OBJETOS
-// =====================================================
 
 for (const documento of documentos) {
   if (documento.existente) {
@@ -819,9 +783,7 @@ for (const documento of documentos) {
   );
 }
 
-// =====================================================
 // 19. CADASTRAR SOLICITAÇÕES
-// =====================================================
 
 for (const [
   indice,
@@ -879,9 +841,7 @@ for (const [
   );
 }
 
-// =====================================================
 // 20. FINALIZAÇÃO
-// =====================================================
 
 console.log(
   '\n=========================================='

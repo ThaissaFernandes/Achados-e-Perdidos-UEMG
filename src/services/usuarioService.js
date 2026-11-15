@@ -16,9 +16,7 @@ import {
   serverTimestamp,
 } from 'firebase/firestore';
 
-// =====================================================
 // 1. CONFIGURAÇÕES
-// =====================================================
 
 // Não exigimos validação institucional da UEMG.
 // A restrição de domínio fica desativada por padrão.
@@ -33,9 +31,6 @@ export const MODO_RESTRITO_UEMG =
 export const MIN_DIGITOS_MATRICULA = 4;
 export const MAX_DIGITOS_MATRICULA = 20;
 
-// Apenas verifica o domínio se o modo restrito
-// tiver sido explicitamente ativado no .env.
-
 export const dominioPermitido = (email) => {
   if (!MODO_RESTRITO_UEMG) {
     return true;
@@ -46,9 +41,7 @@ export const dominioPermitido = (email) => {
   );
 };
 
-// =====================================================
 // 2. ERROS PERSONALIZADOS
-// =====================================================
 
 export class DominioNaoPermitidoError extends Error {
   constructor(email) {
@@ -67,10 +60,7 @@ export class MatriculaEmUsoError extends Error {
   }
 }
 
-// =====================================================
 // 3. VALIDAÇÃO E NORMALIZAÇÃO
-// =====================================================
-
 // Transforma a matrícula em uma chave padronizada.
 //
 // Exemplos:
@@ -135,9 +125,7 @@ function normalizarEmail(email) {
   return valor;
 }
 
-// =====================================================
 // 4. LOGIN
-// =====================================================
 
 export const entrarComSenha = async (email, senha) => {
   const emailNormalizado = normalizarEmail(email);
@@ -151,9 +139,7 @@ export const entrarComSenha = async (email, senha) => {
   return credencial.user;
 };
 
-// =====================================================
 // 5. REDEFINIÇÃO DE SENHA
-// =====================================================
 
 export const enviarRedefinicaoSenha = async (email) => {
   const emailNormalizado = normalizarEmail(email);
@@ -164,17 +150,13 @@ export const enviarRedefinicaoSenha = async (email) => {
   );
 };
 
-// =====================================================
 // 6. LOGOUT
-// =====================================================
 
 export const realizarLogout = async () => {
   await signOut(auth);
 };
 
-// =====================================================
 // 7. CONSULTAR PERFIL
-// =====================================================
 
 export const buscarPerfilUsuario = async (uid) => {
   if (!uid) {
@@ -199,9 +181,7 @@ export const buscarPerfilUsuario = async (uid) => {
   };
 };
 
-// =====================================================
 // 8. COMPLETAR CADASTRO
-// =====================================================
 //
 // Responsável por criar:
 // - usuarios/{uid}
@@ -219,10 +199,8 @@ export const buscarPerfilUsuario = async (uid) => {
 // UPDATE em matriculas/{numero}.
 // Assim, uma matrícula já existente não pode
 // ser sobrescrita.
-//
-// IMPORTANTE:
+
 // O bloqueio real depende do firestore.rules.
-// =====================================================
 
 export const completarCadastro = async ({
   uid,
@@ -232,9 +210,7 @@ export const completarCadastro = async ({
 }) => {
   const usuarioAutenticado = auth.currentUser;
 
-  // -----------------------------------------------
   // Verificar autenticação
-  // -----------------------------------------------
 
   if (
     !usuarioAutenticado ||
@@ -253,9 +229,7 @@ export const completarCadastro = async ({
     throw new Error('EMAIL_INVALIDO');
   }
 
-  // -----------------------------------------------
   // Verificar domínio somente se configurado
-  // -----------------------------------------------
 
   if (!dominioPermitido(emailAutenticado)) {
     throw new DominioNaoPermitidoError(
@@ -263,9 +237,7 @@ export const completarCadastro = async ({
     );
   }
 
-  // -----------------------------------------------
   // Validar dados
-  // -----------------------------------------------
 
   const nomeValidado = validarNome(nome);
 
@@ -273,9 +245,7 @@ export const completarCadastro = async ({
     numeroCadastro
   );
 
-  // -----------------------------------------------
   // Referências do Firestore
-  // -----------------------------------------------
 
   const usuarioRef = doc(
     db,
@@ -289,9 +259,7 @@ export const completarCadastro = async ({
     matriculaValidada
   );
 
-  // -----------------------------------------------
   // Transação atômica
-  // -----------------------------------------------
 
   await runTransaction(db, async (transacao) => {
     // Somente o próprio perfil é consultado.
@@ -301,9 +269,7 @@ export const completarCadastro = async ({
       usuarioRef
     );
 
-    // ---------------------------------------------
     // Caso 1: perfil já existe
-    // ---------------------------------------------
 
     if (usuarioSnap.exists()) {
       const dadosAtuais = usuarioSnap.data();
@@ -328,17 +294,7 @@ export const completarCadastro = async ({
         return;
       }
 
-      // -------------------------------------------
-      // Perfil antigo sem matrícula
-      // -------------------------------------------
-
-      // O documento será criado somente se
-      // a matrícula ainda não estiver reservada.
-      //
-      // Caso já exista, a regra do Firestore
-      // negará a atualização.
-
-      transacao.set(matriculaRef, {
+       transacao.set(matriculaRef, {
         uid,
         criadoEm: serverTimestamp(),
       });
@@ -351,9 +307,7 @@ export const completarCadastro = async ({
       return;
     }
 
-    // ---------------------------------------------
     // Caso 2: perfil novo
-    // ---------------------------------------------
 
     // Reservar matrícula.
 
@@ -382,19 +336,11 @@ export const completarCadastro = async ({
   return true;
 };
 
-// =====================================================
 // 9. CADASTRAR COM E-MAIL E SENHA
-// =====================================================
-//
 // Primeiro cria a conta no Firebase Authentication.
-//
 // Depois cria o perfil e reserva a matrícula.
-//
 // Se a transação falhar, tenta desfazer a conta
 // recém-criada no Authentication.
-//
-// Não são necessárias Cloud Functions.
-// =====================================================
 
 export const cadastrarComSenha = async ({
   email,
@@ -402,9 +348,7 @@ export const cadastrarComSenha = async ({
   nome,
   numeroCadastro,
 }) => {
-  // -----------------------------------------------
   // Validar antes de criar a conta
-  // -----------------------------------------------
 
   const emailNormalizado = normalizarEmail(email);
 
@@ -427,9 +371,7 @@ export const cadastrarComSenha = async ({
     throw new Error('SENHA_INVALIDA');
   }
 
-  // -----------------------------------------------
   // Criar conta no Authentication
-  // -----------------------------------------------
 
   const credencial = await createUserWithEmailAndPassword(
     auth,
@@ -439,9 +381,8 @@ export const cadastrarComSenha = async ({
 
   const usuarioCriado = credencial.user;
 
-  // -----------------------------------------------
   // Criar perfil e matrícula
-  // -----------------------------------------------
+
 
   try {
     await completarCadastro({
@@ -459,9 +400,7 @@ export const cadastrarComSenha = async ({
       erroCadastro
     );
 
-    // ---------------------------------------------
     // Desfazer conta incompleta
-    // ---------------------------------------------
 
     try {
       await deleteUser(usuarioCriado);
@@ -492,15 +431,12 @@ export const cadastrarComSenha = async ({
   }
 };
 
-// =====================================================
 // 10. EXCLUSÃO DE USUÁRIOS
-// =====================================================
 //
 // Excluir apenas um documento do Firestore
 // não remove a conta do Firebase Authentication.
 //
 // Por segurança, a operação fica bloqueada.
-// =====================================================
 
 export const excluirPerfilUsuario = async () => {
   throw new Error(
@@ -508,16 +444,13 @@ export const excluirPerfilUsuario = async () => {
   );
 };
 
-// =====================================================
 // 11. SINCRONIZAÇÃO DE MATRÍCULAS
-// =====================================================
 //
 // Não executamos migração automática de contas
 // antigas pelo navegador.
 //
 // Esse processo precisa identificar conflitos
 // antes de modificar o banco de dados.
-// =====================================================
 
 export const sincronizarMatriculas = async () => {
   throw new Error(

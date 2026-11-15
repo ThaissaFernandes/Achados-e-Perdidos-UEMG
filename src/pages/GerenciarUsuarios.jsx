@@ -28,9 +28,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useToast } from '../hooks/useToast';
 import { PageSkeleton } from '../components/skeletons';
 
-// =====================================================
 // FUNÇÕES AUXILIARES
-// =====================================================
 
 function obterNome(usuario) {
   return String(
@@ -48,8 +46,6 @@ function obterMatricula(usuario) {
   ).trim();
 }
 
-// Apenas normaliza os números para comparação.
-// Não altera os documentos do Firestore.
 function normalizarMatricula(numero) {
   const digitos = String(numero || '').replace(/\D/g, '');
 
@@ -58,8 +54,6 @@ function normalizarMatricula(numero) {
   return digitos.replace(/^0+/, '') || '0';
 }
 
-// Redução da exposição visual dos identificadores pessoais.
-// Atenção: os dados completos ainda são carregados no navegador do administrador.
 function mascararEmail(email) {
   const valor = String(email || '').trim();
   const pos = valor.indexOf('@');
@@ -74,8 +68,6 @@ function mascararMatricula(numero) {
   return `${'*'.repeat(Math.max(0, valor.length - 4))}${valor.slice(-4)}`;
 }
 
-// Consulta compartilhada pelo carregamento inicial
-// e pelo botão de atualização manual.
 async function buscarUsuariosNoFirestore() {
   const snapshot = await getDocs(
     collection(db, 'usuarios')
@@ -97,9 +89,7 @@ async function buscarUsuariosNoFirestore() {
   return lista;
 }
 
-// =====================================================
 // COMPONENTE PRINCIPAL
-// =====================================================
 
 export default function GerenciarUsuarios() {
   const navigate = useNavigate();
@@ -111,9 +101,7 @@ export default function GerenciarUsuarios() {
     carregandoAuth,
   } = useAuth();
 
-  // ===================================================
   // ESTADOS
-  // ===================================================
 
   const [usuarios, setUsuarios] = useState([]);
   const [usuarioParaPromover, setUsuarioParaPromover] = useState(null);
@@ -125,9 +113,7 @@ export default function GerenciarUsuarios() {
   const [resultadoMatriculas, setResultadoMatriculas] =
     useState(null);
 
-  // ===================================================
   // ATUALIZAÇÃO MANUAL
-  // ===================================================
 
   const carregarUsuarios = useCallback(async () => {
     if (!eAdmin) return;
@@ -156,9 +142,7 @@ export default function GerenciarUsuarios() {
     }
   }, [eAdmin, toast]);
 
-  // ===================================================
   // CARREGAMENTO INICIAL
-  // ===================================================
 
   useEffect(() => {
     if (carregandoAuth || !eAdmin) {
@@ -201,9 +185,7 @@ export default function GerenciarUsuarios() {
     };
   }, [carregandoAuth, eAdmin]);
 
-  // ===================================================
   // FILTRAR USUÁRIOS
-  // ===================================================
 
   const usuariosFiltrados = useMemo(() => {
     const termo = busca.trim().toLocaleLowerCase('pt-BR');
@@ -230,13 +212,7 @@ export default function GerenciarUsuarios() {
     });
   }, [usuarios, busca]);
 
-  // ===================================================
   // VERIFICAÇÃO DE MATRÍCULAS
-  // ===================================================
-
-  // Esta verificação é somente de leitura.
-  // Não cria, atualiza ou exclui documentos.
-  // Não substitui as regras do Firestore.
 
   const verificarMatriculas = () => {
     const grupos = new Map();
@@ -295,11 +271,6 @@ export default function GerenciarUsuarios() {
       conflitos,
     });
   };
-
-  // A autorização real utiliza a coleção
-  // administradores/{uid}, verificada no AuthProvider.
-  // Não consideramos o campo eAdmin de outros perfis
-  // uma confirmação de autorização administrativa.
 
   const ehMinhaConta = (usuario) =>
     usuario.id === adminAtual?.uid;
@@ -377,17 +348,13 @@ export default function GerenciarUsuarios() {
     }
   };
 
-  // ===================================================
   // CARREGANDO AUTENTICAÇÃO
-  // ===================================================
 
   if (carregandoAuth) {
     return <PageSkeleton mensagem="Verificando acesso..." />;
   }
 
-  // ===================================================
   // ACESSO RESTRITO
-  // ===================================================
 
   if (!eAdmin) {
     return (
@@ -418,17 +385,13 @@ export default function GerenciarUsuarios() {
     );
   }
 
-  // ===================================================
   // CARREGAMENTO INICIAL DA LISTA
-  // ===================================================
 
   if (loading && usuarios.length === 0) {
     return <PageSkeleton mensagem="Verificando acesso..." />;
   }
 
-  // ===================================================
   // INTERFACE PRINCIPAL
-  // ===================================================
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto pb-20">

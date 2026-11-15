@@ -33,12 +33,7 @@ import { cancelarSolicitacao, obterCodigoRetirada } from '../services/solicitaca
 import CodigoRetirada from '../components/CodigoRetirada';
 import Modal from '../components/Modal';
 
-// =====================================================
 // CONSULTAR SOLICITAÇÕES DO USUÁRIO
-// =====================================================
-
-// A função fica fora do componente para que o efeito
-// não dependa de uma função recriada a cada renderização.
 
 async function buscarSolicitacoesDoUsuario(uid) {
   const consulta = query(
@@ -59,9 +54,7 @@ async function buscarSolicitacoesDoUsuario(uid) {
   }));
 }
 
-// =====================================================
 // FORMATAR DATA
-// =====================================================
 
 function formatarData(sol) {
   const data =
@@ -84,9 +77,7 @@ function formatarData(sol) {
   return 'Recente';
 }
 
-// =====================================================
 // COMPONENTE PRINCIPAL
-// =====================================================
 
 export default function Profile() {
   const { usuario, eAdmin } = useAuth();
@@ -96,9 +87,7 @@ export default function Profile() {
 
   const uid = usuario?.uid;
 
-  // ===================================================
   // ESTADOS
-  // ===================================================
 
   const [solicitacoes, setSolicitacoes] = useState([]);
 
@@ -112,9 +101,7 @@ export default function Profile() {
 
   const [erro, setErro] = useState(false);
 
-  // ===================================================
   // RECARREGAR SOLICITAÇÕES MANUALMENTE
-  // ===================================================
 
   const carregarSolicitacoes = useCallback(async () => {
     if (!uid || eAdmin) {
@@ -150,21 +137,13 @@ export default function Profile() {
     }
   }, [uid, eAdmin]);
 
-  // ===================================================
   // CARREGAMENTO INICIAL
-  // ===================================================
-
   useEffect(() => {
     if (!uid || eAdmin) {
       return;
     }
 
     let ativo = true;
-
-    // A consulta é assíncrona.
-    // As atualizações de estado ocorrem depois
-    // da resposta do Firestore, não diretamente
-    // no corpo do efeito.
 
     async function consultar() {
       try {
@@ -196,16 +175,12 @@ export default function Profile() {
 
     consultar();
 
-    // Evita atualizações de uma consulta anterior
-    // quando o componente é desmontado ou o UID muda.
     return () => {
       ativo = false;
     };
   }, [uid, eAdmin]);
 
-  // ===================================================
   // CANCELAR SOLICITAÇÃO
-  // ===================================================
 
   const handleCancelarSolicitacao = async () => {
     if (!solicitacaoParaCancelar || processandoId) return;
@@ -240,9 +215,7 @@ export default function Profile() {
     }
   };
 
-  // ===================================================
   // SAIR DA CONTA
-  // ===================================================
 
   const handleLogout = async () => {
     try {
@@ -260,16 +233,12 @@ export default function Profile() {
     }
   };
 
-  // ===================================================
   // INTERFACE
-  // ===================================================
 
   return (
     <div className="space-y-6 pb-28 sm:pb-10 max-w-4xl mx-auto">
 
-      {/* ============================================== */}
-      {/* 1. CARTÃO DO USUÁRIO */}
-      {/* ============================================== */}
+      // 1. CARTÃO DO USUÁRIO 
 
       <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
 
@@ -340,9 +309,7 @@ export default function Profile() {
 
       </div>
 
-      {/* ============================================== */}
-      {/* 2. PAINEL DO ADMINISTRADOR */}
-      {/* ============================================== */}
+      // 2. PAINEL DO ADMINISTRADOR
 
       {eAdmin ? (
         <div className="bg-amber-50 from-amber-50/80 to-orange-50/50 border border-amber-200/80 p-5 md:p-6 rounded-3xl space-y-4 shadow-xs">
@@ -420,9 +387,7 @@ export default function Profile() {
         </div>
       )}
 
-      {/* ============================================== */}
-      {/* 4. SOLICITAÇÕES DE RETIRADA */}
-      {/* ============================================== */}
+      // 4. SOLICITAÇÕES DE RETIRADA
 
       {!eAdmin && (
         <div className="space-y-4">
@@ -436,7 +401,7 @@ export default function Profile() {
             Minhas Solicitações de Retirada ({solicitacoes.length})
           </h3>
 
-          {/* CARREGAMENTO */}
+          // CARREGAMENTO 
 
           {carregandoSolicitacoes ? (
             <div
@@ -528,7 +493,7 @@ export default function Profile() {
                         Setor de Achados e Perdidos — Administração
                       </p>
 
-                      {/* PEDIDO PENDENTE */}
+                      // PEDIDO PENDENTE
 
                       {pendente ? (
                         <div className="space-y-2">
@@ -611,7 +576,7 @@ export default function Profile() {
 
                       ) : (
 
-                        /* STATUS DESCONHECIDO */
+                        // STATUS DESCONHECIDO 
 
                         <div className="bg-gray-100 border border-gray-200 p-3 rounded-2xl text-xs text-gray-800">
                           Status da solicitação indisponível.
@@ -622,7 +587,7 @@ export default function Profile() {
 
                     </div>
 
-                    {/* RODAPÉ DO PEDIDO */}
+                    // RODAPÉ DO PEDIDO 
 
                     <div className="flex items-center justify-between pt-2 border-t border-gray-100">
 
@@ -686,7 +651,7 @@ export default function Profile() {
       )}
 
 
-      {/* Confirmação de cancelamento com o mesmo diálogo do sistema */}
+      // Confirmação de cancelamento com o mesmo diálogo do sistema 
       <Modal
         aberto={Boolean(solicitacaoParaCancelar)}
         onFechar={() => setSolicitacaoParaCancelar(null)}

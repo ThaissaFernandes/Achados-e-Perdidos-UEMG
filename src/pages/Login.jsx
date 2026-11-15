@@ -77,7 +77,7 @@ export default function Login() {
     try {
       await enviarRedefinicaoSenha(email.trim());
     } catch (err) {
-      // Não revelamos se o e-mail existe; só tratamos falhas de formato e de rede
+      // Não revelamos se o e-mail existe, só tratamos falhas de formato e de rede
       if (err.code === 'auth/invalid-email' || err.code === 'auth/network-request-failed') {
         setErro(mensagemDeErro(err));
         setEnviandoReset(false);

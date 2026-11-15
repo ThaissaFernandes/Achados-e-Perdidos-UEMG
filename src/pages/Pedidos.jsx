@@ -25,9 +25,7 @@ import {
 import { normalizar } from '../utils/texto';
 import Modal from '../components/Modal';
 
-// ===================================================
 // FUNÇÕES AUXILIARES
-// ===================================================
 
 const formatarDataHora = (pedido) => {
   const segundos = pedido.dataSolicitacao?.seconds;
@@ -51,9 +49,7 @@ const formatarDataHora = (pedido) => {
 const CODIGO_REGEX =
   /^[A-HJ-NP-Z2-9]{3}-[A-HJ-NP-Z2-9]{3}$/;
 
-// ===================================================
 // COMPONENTE PRINCIPAL
-// ===================================================
 
 export default function Pedidos() {
   const toast = useToast();
@@ -75,9 +71,7 @@ export default function Pedidos() {
   const [codigoDigitado, setCodigoDigitado] =
     useState('');
 
-  // ===================================================
   // FILTRAR PEDIDOS
-  // ===================================================
 
   const filtrados = useMemo(() => {
     const termo = normalizar(busca).replace(
@@ -102,9 +96,7 @@ export default function Pedidos() {
     );
   }, [pedidos, busca]);
 
-  // ===================================================
   // ABRIR E FECHAR CONFIRMAÇÃO
-  // ===================================================
 
   const abrirConfirmacao = (pedido, acao) => {
     setCodigoDigitado('');
@@ -120,9 +112,7 @@ export default function Pedidos() {
     setCodigoDigitado('');
   };
 
-  // ===================================================
   // EXECUTAR ATENDIMENTO
-  // ===================================================
 
   const executar = async () => {
     if (!emConfirmacao || processando) {
@@ -205,13 +195,11 @@ export default function Pedidos() {
   const codigoValido =
     CODIGO_REGEX.test(codigoDigitado);
 
-  // ===================================================
   // INTERFACE
-  // ===================================================
 
   return (
     <div className="space-y-5 pb-24 sm:pb-8 max-w-4xl mx-auto">
-      {/* CABEÇALHO */}
+      // CABEÇALHO
 
       <div>
         <h1 className="text-xl font-bold text-gray-900">
@@ -227,7 +215,7 @@ export default function Pedidos() {
         </p>
       </div>
 
-      {/* PESQUISA */}
+      // PESQUISA
 
       <div
         role="search"
@@ -265,7 +253,7 @@ export default function Pedidos() {
         )}
       </div>
 
-      {/* QUANTIDADE DE PEDIDOS */}
+      // QUANTIDADE DE PEDIDOS
 
       <p
         className="text-sm font-bold text-gray-800"
@@ -281,7 +269,7 @@ export default function Pedidos() {
             }`}
       </p>
 
-      {/* CARREGAMENTO */}
+      // CARREGAMENTO
 
       {carregando ? (
         <ListSkeleton count={4} />
@@ -333,7 +321,7 @@ export default function Pedidos() {
               key={pedido.id}
               className="bg-white rounded-3xl border border-gray-100 shadow-xs p-4 space-y-3 flex flex-col"
             >
-              {/* ITEM E STATUS */}
+              // ITEM E STATUS
 
               <div className="flex items-start justify-between gap-2">
                 <Link
@@ -349,7 +337,7 @@ export default function Pedidos() {
                 </span>
               </div>
 
-              {/* CÓDIGO E MATRÍCULA */}
+              // CÓDIGO E MATRÍCULA
 
               <div className="grid grid-cols-2 gap-2">
                 <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-2.5 text-center">
@@ -381,7 +369,7 @@ export default function Pedidos() {
                 </div>
               </div>
 
-              {/* DADOS DO SOLICITANTE */}
+              // DADOS DO SOLICITANTE
 
               <div className="text-sm text-gray-700 space-y-1">
                 <p className="flex items-center gap-1.5">
@@ -409,7 +397,7 @@ export default function Pedidos() {
                 </p>
               </div>
 
-              {/* BOTÕES DE AÇÃO */}
+              // BOTÕES DE AÇÃO
 
               <div className="flex gap-2 pt-2 border-t border-gray-100 mt-auto text-sm font-semibold">
                 <button
@@ -451,8 +439,7 @@ export default function Pedidos() {
         </ul>
       )}
 
-      {/* MODAL DE CONFIRMAÇÃO */}
-
+      // MODAL DE CONFIRMAÇÃO
       <Modal
         aberto={Boolean(emConfirmacao)}
         onFechar={fecharConfirmacao}
@@ -496,7 +483,7 @@ export default function Pedidos() {
           </div>
         )}
 
-        {/* CAMPO DO CÓDIGO */}
+        // CAMPO DO CÓDIGO
 
         {confirmando && (
           <label className="block text-sm font-semibold text-gray-800">
@@ -530,7 +517,7 @@ export default function Pedidos() {
           </label>
         )}
 
-        {/* AÇÕES DO MODAL */}
+        // AÇÕES DO MODAL
 
         <div className="flex gap-2 text-sm font-semibold pt-1">
           <button

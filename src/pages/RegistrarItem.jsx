@@ -263,7 +263,7 @@ export default function RegistrarItem() {
 
   return (
     <div className="space-y-5 pb-28 sm:pb-10 max-w-2xl mx-auto">
-      {/* Cabeçalho */}
+      // Cabeçalho 
       <div className="flex items-center gap-3">
         <button
           type="button"
@@ -285,7 +285,7 @@ export default function RegistrarItem() {
         </div>
       </div>
 
-      {/* Mensagem de erro */}
+      // Mensagem de erro 
       {erro && (
         <div
           className="p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-2xl text-sm flex items-start gap-2"
@@ -305,7 +305,7 @@ export default function RegistrarItem() {
         onSubmit={handleSubmit}
         className="bg-white p-4 sm:p-6 rounded-3xl border border-gray-100 shadow-xs space-y-5 text-sm"
       >
-        {/* Situação inicial */}
+        // Situação inicial 
         <fieldset className="space-y-1.5">
           <legend className="font-semibold text-gray-800 mb-1.5">
             Situação inicial
@@ -346,7 +346,7 @@ export default function RegistrarItem() {
           </div>
         </fieldset>
 
-        {/* Foto: câmera ou galeria */}
+        // Foto: câmera ou galeria 
         <div className="space-y-1.5">
           <span className="font-semibold text-gray-800 block">
             Foto do pertence (opcional)
@@ -372,7 +372,7 @@ export default function RegistrarItem() {
           ) : (
             
 <div className="grid grid-cols-2 gap-2">
-  {/* Abrir câmera no celular ou computador */}
+// Abrir câmera no celular ou computador 
   <button
     type="button"
     onClick={() => setCameraAberta(true)}
@@ -409,7 +409,7 @@ export default function RegistrarItem() {
           </p>
         </div>
 
-        {/* Título */}
+        // Título 
         <div className="space-y-1.5">
           <label
             htmlFor="reg-titulo"
@@ -443,7 +443,7 @@ export default function RegistrarItem() {
           </div>
         </div>
 
-        {/* Categoria e Local */}
+        // Categoria e Local
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-1">
             <FiltroDropdown
@@ -518,7 +518,7 @@ export default function RegistrarItem() {
           </div>
         </div>
 
-        {/* Detalhes adicionais */}
+        // Detalhes adicionais 
         <div className="space-y-1.5">
           <label
             htmlFor="reg-detalhes"
@@ -550,7 +550,7 @@ export default function RegistrarItem() {
           </div>
         </div>
 
-        {/* Confirmar cadastro */}
+        // Confirmar cadastro 
         <button
           type="submit"
           disabled={carregando}
@@ -572,7 +572,7 @@ export default function RegistrarItem() {
         </button>
       </form>
 
-      {/* Captura de foto pela câmera do celular ou computador */}      <CapturaFoto
+      // Captura de foto pela câmera do celular ou computador       <CapturaFoto
         aberto={cameraAberta}
         onFechar={fecharCamera}
         onCapturar={handleFotoDaCamera}

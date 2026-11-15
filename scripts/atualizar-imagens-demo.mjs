@@ -41,9 +41,7 @@ import {
   itens,
 } from './demo-data.mjs';
 
-// ============================================================
 // CONFIGURAÇÕES
-// ============================================================
 
 const PROJETO = 'achados-e-perdidos-uemg';
 
@@ -55,9 +53,7 @@ const PASTA_IMAGENS = resolve(
   'imagens-demo'
 );
 
-// ============================================================
 // MAPEAMENTO DAS 18 FOTOGRAFIAS PNG
-// ============================================================
 
 const IMAGENS = {
   mochila: 'mochila.png',
@@ -80,9 +76,7 @@ const IMAGENS = {
   bolsa: 'bolsaOmbro.png',
 };
 
-// ============================================================
 // VALIDAÇÕES
-// ============================================================
 
 function validarDados() {
   if (itens.length !== 18) {
@@ -180,9 +174,7 @@ function validarCredenciais() {
   }
 }
 
-// ============================================================
 // IDENTIFICADORES DOS DOCUMENTOS FICTÍCIOS
-// ============================================================
 
 function idEsperado(id, slug) {
   return (
@@ -191,9 +183,7 @@ function idEsperado(id, slug) {
   );
 }
 
-// ============================================================
 // ENDEREÇOS DAS IMAGENS
-// ============================================================
 
 function obterUrlImagem(slug) {
   const arquivo = IMAGENS[slug];
@@ -208,9 +198,7 @@ function urlSvgDemonstrativa(url, slug) {
   );
 }
 
-// ============================================================
 // VERIFICAR OU ATUALIZAR FIRESTORE
-// ============================================================
 
 async function atualizar(aplicar) {
   validarDados();
@@ -361,9 +349,7 @@ async function atualizar(aplicar) {
       return;
     }
 
-    // ========================================================
     // TRANSAÇÃO: LEITURAS ANTES DAS GRAVAÇÕES
-    // ========================================================
 
     const atualizados = await db.runTransaction(
       async (transacao) => {
@@ -436,9 +422,7 @@ async function atualizar(aplicar) {
   }
 }
 
-// ============================================================
 // EXECUÇÃO
-// ============================================================
 
 const opcoes = process.argv.slice(2);
 

@@ -7,9 +7,7 @@ import { ToastProvider } from './context/ToastProvider';
 import ProtectedRoute from './routes/ProtectedRoute';
 import MobileLayout from './components/layout/MobileLayout';
 
-// =====================================================
 // CARREGAMENTO SOB DEMANDA DAS PÁGINAS
-// =====================================================
 
 const Home = lazy(() => import('./pages/Home'));
 const Buscar = lazy(() => import('./pages/Buscar'));
@@ -23,9 +21,7 @@ const Cadastro = lazy(() => import('./pages/Cadastro'));
 const GerenciarUsuarios = lazy(() => import('./pages/GerenciarUsuarios'));
 const Pedidos = lazy(() => import('./pages/Pedidos'));
 
-// =====================================================
 // TELA DE CARREGAMENTO
-// =====================================================
 
 function CarregandoPagina() {
   return (
@@ -90,9 +86,7 @@ function CarregandoPagina() {
   );
 }
 
-// =====================================================
 // APLICAÇÃO
-// =====================================================
 
 export default function App() {
   return (
@@ -153,7 +147,7 @@ export default function App() {
                     />
                   </Route>
 
-                  {/* ROTAS ADMINISTRATIVAS */}
+                  // ROTAS ADMINISTRATIVAS 
 
                   <Route
                     element={

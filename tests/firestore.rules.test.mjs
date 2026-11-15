@@ -15,9 +15,7 @@ import {
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/firestore';
 
-// =====================================================
 // 1. CONFIGURAÇÃO DO FIREBASE EMULATOR
-// =====================================================
 
 const ambiente = await initializeTestEnvironment({
   projectId: 'demo-achados-seguranca',
@@ -31,9 +29,7 @@ const ambiente = await initializeTestEnvironment({
   },
 });
 
-// =====================================================
 // 2. USUÁRIOS FICTÍCIOS
-// =====================================================
 
 const aluno = ambiente.authenticatedContext(
   'aluno-teste',
@@ -64,9 +60,7 @@ const alunoDuplicado = ambiente.authenticatedContext(
   { email: 'duplicado@teste.com' }
 ).firestore();
 
-// =====================================================
 // 3. CONSTANTES E FUNÇÕES AUXILIARES
-// =====================================================
 
 const agora = () =>
   firebase.firestore.FieldValue.serverTimestamp();
@@ -100,9 +94,7 @@ async function lerSemRegras(caminho) {
   return dados;
 }
 
-// =====================================================
 // 4. PREPARAR DADOS DE TESTE
-// =====================================================
 
 async function preparar() {
   await ambiente.clearFirestore();
@@ -172,9 +164,7 @@ async function preparar() {
   );
 }
 
-// =====================================================
 // 5. PREPARAR RESERVA FICTÍCIA
-// =====================================================
 
 async function prepararReserva(
   id,
@@ -233,9 +223,7 @@ async function prepararReserva(
   );
 }
 
-// =====================================================
 // 6. TENTATIVA DE CRIAÇÃO DIRETA PELO CLIENTE
-// =====================================================
 
 function criarPedidoDiretamente(
   db,
@@ -272,9 +260,7 @@ function criarPedidoDiretamente(
   return batch.commit();
 }
 
-// =====================================================
 // 7. TENTATIVA DE FINALIZAÇÃO PELO CLIENTE
-// =====================================================
 
 function finalizar(
   db,
@@ -313,9 +299,7 @@ function finalizar(
   });
 }
 
-// =====================================================
 // 8. CADASTRAR PERFIL E MATRÍCULA
-// =====================================================
 
 function criarCadastro(
   db,
@@ -349,16 +333,12 @@ function criarCadastro(
   return batch.commit();
 }
 
-// =====================================================
 // 9. TESTES AUTOMATIZADOS
-// =====================================================
 
 try {
   await test('Segurança do Firestore', async (t) => {
 
-    // =================================================
     // GRUPO 1: ACESSO AOS ITENS
-    // =================================================
 
     await t.test(
       'Visitante pode consultar itens',
@@ -477,9 +457,7 @@ try {
       await assertFails(admin.collection('matriculas').get());
     });
 
-    // =================================================
     // GRUPO 2: PRIVACIDADE DAS SOLICITAÇÕES
-    // =================================================
 
     await t.test(
       'Aluno pode consultar sua solicitação',
@@ -539,9 +517,7 @@ try {
       }
     );
 
-    // =================================================
     // GRUPO 3: PROTEÇÃO DOS CÓDIGOS PRIVADOS
-    // =================================================
 
     await t.test(
       'Somente o aluno dono pode ler seu código privado',
@@ -718,9 +694,7 @@ try {
       }
     );
 
-    // =================================================
     // GRUPO 4: CRIAÇÃO DE SOLICITAÇÕES
-    // =================================================
 
     await t.test(
       'Aluno não pode criar solicitação diretamente',
@@ -851,9 +825,7 @@ try {
       }
     );
 
-    // =================================================
     // GRUPO 5: CANCELAMENTO
-    // =================================================
 
     await t.test(
       'Dono cancela pedido pendente e libera item',
@@ -972,9 +944,7 @@ try {
       }
     );
 
-    // =================================================
     // GRUPO 6: CONFIRMAÇÃO E RECUSA
-    // =================================================
 
     await t.test(
       'Aluno não pode confirmar retirada diretamente',
@@ -1123,9 +1093,7 @@ try {
       }
     );
 
-    // =================================================
     // GRUPO 7: ADMINISTRAÇÃO
-    // =================================================
 
     await t.test(
       'Admin promove aluno em batch atômico',
@@ -1483,9 +1451,7 @@ try {
       }
     );
 
-    // =================================================
     // GRUPO 8: EDIÇÃO ADMINISTRATIVA DOS ITENS
-    // =================================================
 
     await t.test(
       'Admin pode editar título e descrição',
@@ -1554,9 +1520,7 @@ try {
       }
     );
 
-    // =================================================
     // GRUPO 9: MATRÍCULAS E PERFIS
-    // =================================================
 
     await t.test(
       'Aluno cria perfil e matrícula juntos',

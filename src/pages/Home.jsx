@@ -124,10 +124,7 @@ export default function Home() {
   return (
     <div className="space-y-5 md:space-y-6">
 
-      {/* ============================================== */}
       {/* BANNER ADMINISTRATIVO */}
-      {/* ============================================== */}
-
       {eAdmin && (
         <div className="rounded-2xl border border-amber-700/60 bg-[#362419] p-4 text-amber-50 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
 
@@ -182,10 +179,7 @@ export default function Home() {
         </div>
       )}
 
-      {/* ============================================== */}
       {/* BANNER PRINCIPAL COM BUSCA RÁPIDA */}
-      {/* ============================================== */}
-
       <section
         aria-labelledby="titulo-boas-vindas"
         className="bg-gradient-to-r from-indigo-900 via-indigo-900 to-indigo-800 text-white p-5 md:p-7 rounded-2xl shadow-xs space-y-4"
@@ -263,9 +257,7 @@ export default function Home() {
         )}
       </section>
 
-      {/* ============================================== */}
       {/* COMO FUNCIONA */}
-      {/* ============================================== */}
 
       {!eAdmin && (
         <section
@@ -321,9 +313,7 @@ export default function Home() {
         </section>
       )}
 
-      {/* ============================================== */}
       {/* VITRINE DE ITENS RECENTES */}
-      {/* ============================================== */}
 
       <section
         aria-labelledby="titulo-recentes"
