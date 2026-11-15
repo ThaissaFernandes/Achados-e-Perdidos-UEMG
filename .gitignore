@@ -2,9 +2,14 @@
 # Dependências e builds
 node_modules/
 dist/
+build/
+coverage/
 
-# Cache do Firebase
+# Cache e emuladores do Firebase
 .firebase/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
 
 # Variáveis de ambiente e segredos
 .env
@@ -13,8 +18,12 @@ dist/
 
 # Credenciais administrativas
 *service-account*.json
+*serviceAccount*.json
 *firebase-admin*.json
+*adminsdk*.json
 chave-firebase.json
+*.pem
+*.key
 
 # Backups locais
 firestore.rules.backup
@@ -23,6 +32,9 @@ backup-*/
 
 # Logs
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
 # Arquivos de sistema
 .DS_Store
